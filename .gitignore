@@ -1,0 +1,31 @@
+# Flutter/Dart
+.dart_tool/
+.packages
+build/
+*.iml
+.idea/
+.vscode/
+*.lock
+
+# iOS
+ivf_app/ios/Pods/
+ivf_app/ios/.symlinks/
+ivf_app/ios/Flutter/Flutter.framework
+ivf_app/ios/Flutter/Flutter.podspec
+ivf_app/ios/Flutter/ephemeral/
+
+# Android
+ivf_app/android/.gradle/
+ivf_app/android/app/debug/
+ivf_app/android/app/profile/
+ivf_app/android/app/release/
+*.apk
+*.aab
+
+# macOS
+.DS_Store
+*.swp
+
+# Environment
+.env
+*.local
