@@ -2,50 +2,141 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/simple_treatment_cycle.dart';
 
-/// 심플 치료 사이클 서비스
+/// 타임라인 기반 치료 사이클 서비스
 /// SharedPreferences를 사용한 로컬 저장
 class SimpleTreatmentService {
-  static const String _currentCycleKey = 'simple_current_cycle';
-  static const String _pastCyclesKey = 'simple_past_cycles';
+  static const String _currentCycleKey = 'timeline_current_cycle';
+  static const String _pastCyclesKey = 'timeline_past_cycles';
+  static const String _legacyCurrentCycleKey = 'simple_current_cycle';
+  static const String _legacyPastCyclesKey = 'simple_past_cycles';
+
+  /// 사이클이 명시적으로 생성되었는지 확인 (시술 선택 화면 표시 여부 결정)
+  static Future<bool> hasCycleStarted() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.containsKey(_currentCycleKey) || prefs.containsKey(_legacyCurrentCycleKey);
+  }
 
   /// 현재 사이클 조회
-  static Future<SimpleTreatmentCycle> getCurrentCycle() async {
+  static Future<TreatmentCycle> getCurrentCycle() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString(_currentCycleKey);
+
+    // 새 키에서 먼저 조회
+    var jsonString = prefs.getString(_currentCycleKey);
 
     if (jsonString == null) {
-      // 기본값: 1차 채취
-      return SimpleTreatmentCycle.create(cycleNumber: 1);
+      // 레거시 데이터 마이그레이션 시도
+      final legacyJson = prefs.getString(_legacyCurrentCycleKey);
+      if (legacyJson != null) {
+        try {
+          final legacy = SimpleTreatmentCycle.fromJson(
+              jsonDecode(legacyJson) as Map<String, dynamic>);
+          final migrated = legacy.toNewModel();
+          await saveCurrentCycle(migrated);
+          return migrated;
+        } catch (e) {
+          // 마이그레이션 실패 시 기본값 반환
+        }
+      }
+
+      // 기본값: 1차 시도
+      return TreatmentCycle.create(cycleNumber: 1);
     }
 
     try {
       final json = jsonDecode(jsonString) as Map<String, dynamic>;
-      return SimpleTreatmentCycle.fromJson(json);
+      return TreatmentCycle.fromJson(json);
     } catch (e) {
       // 파싱 실패 시 기본값 반환
-      return SimpleTreatmentCycle.create(cycleNumber: 1);
+      return TreatmentCycle.create(cycleNumber: 1);
     }
   }
 
   /// 현재 사이클 저장
-  static Future<void> saveCurrentCycle(SimpleTreatmentCycle cycle) async {
+  static Future<void> saveCurrentCycle(TreatmentCycle cycle) async {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = jsonEncode(cycle.toJson());
     await prefs.setString(_currentCycleKey, jsonString);
   }
 
-  /// 단계 업데이트 (현재 사이클)
-  static Future<SimpleTreatmentCycle> updateStage(
-    SimpleTreatmentStage stage,
-  ) async {
+  /// 사이클 저장 (현재 사이클 업데이트)
+  static Future<void> saveCycle(TreatmentCycle cycle) async {
+    await saveCurrentCycle(cycle);
+  }
+
+  /// 기본 사이클 생성 (시술 선택 없이 바로 시작)
+  static Future<TreatmentCycle> createDefaultCycle() async {
+    // 이미 사이클이 있는지 확인
+    final hasStarted = await hasCycleStarted();
+    if (hasStarted) {
+      return await getCurrentCycle();
+    }
+
+    // 기본 IVF 사이클 생성
+    final now = DateTime.now();
+    final cycleNumber = await getNextCycleNumber(TreatmentType.ivf);
+
+    final newCycle = TreatmentCycle(
+      id: 'cycle_${now.millisecondsSinceEpoch}',
+      cycleNumber: cycleNumber,
+      type: TreatmentType.ivf,
+      startDate: now,
+      events: [],
+    );
+
+    await saveCurrentCycle(newCycle);
+    // hasCycleStarted()는 _currentCycleKey 존재 여부로 판단하므로 별도 플래그 불필요
+
+    return newCycle;
+  }
+
+  /// 이벤트 추가
+  static Future<TreatmentCycle> addEvent(TreatmentEvent event) async {
     final currentCycle = await getCurrentCycle();
-    final updatedCycle = currentCycle.updateStage(stage);
+    final updatedCycle = currentCycle.addEvent(event);
+    await saveCurrentCycle(updatedCycle);
+    return updatedCycle;
+  }
+
+  /// 이벤트 업데이트
+  static Future<TreatmentCycle> updateEvent(TreatmentEvent event) async {
+    final currentCycle = await getCurrentCycle();
+    final updatedCycle = currentCycle.updateEvent(event);
+    await saveCurrentCycle(updatedCycle);
+    return updatedCycle;
+  }
+
+  /// 이벤트 삭제
+  static Future<TreatmentCycle> removeEvent(String eventId) async {
+    final currentCycle = await getCurrentCycle();
+    final updatedCycle = currentCycle.removeEvent(eventId);
+    await saveCurrentCycle(updatedCycle);
+    return updatedCycle;
+  }
+
+  /// 사이클 결과 설정
+  static Future<TreatmentCycle> setCycleResult(CycleResult result) async {
+    final currentCycle = await getCurrentCycle();
+    final updatedCycle = currentCycle.copyWith(
+      result: result,
+      endDate: DateTime.now(),
+    );
+    await saveCurrentCycle(updatedCycle);
+    return updatedCycle;
+  }
+
+  /// 사이클 결과 초기화
+  static Future<TreatmentCycle> clearCycleResult() async {
+    final currentCycle = await getCurrentCycle();
+    final updatedCycle = currentCycle.copyWith(
+      clearResult: true,
+      clearEndDate: true,
+    );
     await saveCurrentCycle(updatedCycle);
     return updatedCycle;
   }
 
   /// 지난 사이클 목록 조회
-  static Future<List<SimpleTreatmentCycle>> getPastCycles() async {
+  static Future<List<TreatmentCycle>> getPastCycles() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = prefs.getString(_pastCyclesKey);
 
@@ -56,7 +147,7 @@ class SimpleTreatmentService {
     try {
       final jsonList = jsonDecode(jsonString) as List<dynamic>;
       return jsonList
-          .map((j) => SimpleTreatmentCycle.fromJson(j as Map<String, dynamic>))
+          .map((j) => TreatmentCycle.fromJson(j as Map<String, dynamic>))
           .toList();
     } catch (e) {
       return [];
@@ -64,40 +155,131 @@ class SimpleTreatmentService {
   }
 
   /// 지난 사이클 목록 저장
-  static Future<void> savePastCycles(List<SimpleTreatmentCycle> cycles) async {
+  static Future<void> savePastCycles(List<TreatmentCycle> cycles) async {
     final prefs = await SharedPreferences.getInstance();
     final jsonList = cycles.map((c) => c.toJson()).toList();
     final jsonString = jsonEncode(jsonList);
     await prefs.setString(_pastCyclesKey, jsonString);
   }
 
-  /// 새 채취 시작 (현재 사이클을 지난 사이클로 이동)
-  static Future<SimpleTreatmentCycle> startNewRetrievalCycle() async {
+  /// 새 사이클 시작 (현재 사이클을 지난 사이클로 이동)
+  /// [type]: 시술 종류 (시험관/인공수정)
+  /// [cycleNumber]: N차 시도
+  /// [isNaturalCycle]: 자연주기 여부 (인공수정만)
+  /// [isFrozenTransfer]: 동결배아 이식 여부 (시험관만)
+  static Future<TreatmentCycle> startNewCycle({
+    TreatmentType type = TreatmentType.ivf,
+    int? cycleNumber,
+    bool isNaturalCycle = false,
+    bool isFrozenTransfer = false,
+  }) async {
     final currentCycle = await getCurrentCycle();
     final pastCycles = await getPastCycles();
 
-    // 현재 사이클이 데이터가 있으면 지난 사이클로 이동
+    // 현재 사이클에 데이터가 있으면 지난 사이클로 이동
     if (_hasAnyData(currentCycle)) {
       pastCycles.insert(0, currentCycle);
       await savePastCycles(pastCycles);
     }
 
-    // 새 사이클 생성 (회차 증가)
-    final newCycleNumber = pastCycles.isEmpty ? 1 : pastCycles.length + 1;
-    final newCycle = SimpleTreatmentCycle.create(cycleNumber: newCycleNumber);
+    // 새 사이클 생성
+    // cycleNumber가 지정되지 않은 경우, 같은 타입의 가장 높은 회차 + 1
+    int newCycleNumber;
+    if (cycleNumber != null) {
+      newCycleNumber = cycleNumber;
+    } else {
+      // 같은 타입의 과거 사이클 중 가장 높은 회차 찾기
+      final sameTypeCycles = pastCycles.where((c) => c.type == type).toList();
+      if (sameTypeCycles.isEmpty) {
+        newCycleNumber = 1;
+      } else {
+        final maxNumber = sameTypeCycles
+            .map((c) => c.cycleNumber)
+            .reduce((a, b) => a > b ? a : b);
+        newCycleNumber = maxNumber + 1;
+      }
+    }
+
+    final newCycle = TreatmentCycle.create(
+      type: type,
+      cycleNumber: newCycleNumber,
+      isNaturalCycle: isNaturalCycle,
+      isFrozenTransfer: isFrozenTransfer,
+    );
     await saveCurrentCycle(newCycle);
 
     return newCycle;
   }
 
   /// 사이클에 데이터가 있는지 확인
-  static bool _hasAnyData(SimpleTreatmentCycle cycle) {
-    for (final stage in cycle.stages) {
-      if (stage.hasDate || stage.count != null || stage.result != null) {
-        return true;
-      }
+  static bool _hasAnyData(TreatmentCycle cycle) {
+    return cycle.events.isNotEmpty || cycle.result != null;
+  }
+
+  /// 다음 추천 회차 계산
+  /// [type]: 시술 종류
+  static Future<int> getNextCycleNumber(TreatmentType type) async {
+    final currentCycle = await getCurrentCycle();
+    final pastCycles = await getPastCycles();
+
+    // 현재 사이클과 과거 사이클 모두 확인
+    final allCycles = [currentCycle, ...pastCycles];
+    final sameTypeCycles = allCycles.where((c) => c.type == type).toList();
+
+    if (sameTypeCycles.isEmpty) {
+      return 1;
     }
-    return false;
+
+    final maxNumber = sameTypeCycles
+        .map((c) => c.cycleNumber)
+        .reduce((a, b) => a > b ? a : b);
+    return maxNumber + 1;
+  }
+
+  /// 사이클 정보 업데이트 (차수, 시술 종류, 시작일 등)
+  static Future<TreatmentCycle> updateCycle(TreatmentCycle updatedCycle) async {
+    final currentCycle = await getCurrentCycle();
+
+    // 현재 사이클인지 확인
+    if (currentCycle.id == updatedCycle.id) {
+      await saveCurrentCycle(updatedCycle);
+      return updatedCycle;
+    }
+
+    // 과거 사이클 중에서 찾기
+    final pastCycles = await getPastCycles();
+    final index = pastCycles.indexWhere((c) => c.id == updatedCycle.id);
+    if (index != -1) {
+      pastCycles[index] = updatedCycle;
+      await savePastCycles(pastCycles);
+    }
+
+    return updatedCycle;
+  }
+
+  /// 사이클 삭제
+  static Future<void> deleteCycle(String cycleId) async {
+    final currentCycle = await getCurrentCycle();
+    final pastCycles = await getPastCycles();
+
+    // 현재 사이클 삭제
+    if (currentCycle.id == cycleId) {
+      // 과거 사이클이 있으면 가장 최근 것을 현재 사이클로 이동
+      if (pastCycles.isNotEmpty) {
+        final newCurrent = pastCycles.removeAt(0);
+        await saveCurrentCycle(newCurrent);
+        await savePastCycles(pastCycles);
+      } else {
+        // 과거 사이클이 없으면 새 사이클 생성
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_currentCycleKey);
+      }
+      return;
+    }
+
+    // 과거 사이클에서 삭제
+    pastCycles.removeWhere((c) => c.id == cycleId);
+    await savePastCycles(pastCycles);
   }
 
   /// 모든 데이터 초기화 (테스트용)
@@ -105,42 +287,150 @@ class SimpleTreatmentService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_currentCycleKey);
     await prefs.remove(_pastCyclesKey);
+    // 레거시 데이터도 삭제
+    await prefs.remove(_legacyCurrentCycleKey);
+    await prefs.remove(_legacyPastCyclesKey);
+  }
+
+  /// 날짜 범위 내의 모든 이벤트 조회 (캘린더 연동용)
+  /// 현재 사이클과 과거 사이클의 모든 이벤트를 날짜별로 반환
+  static Future<Map<DateTime, List<TreatmentEvent>>> getEventsByDateRange(
+    DateTime startDate,
+    DateTime endDate,
+  ) async {
+    final currentCycle = await getCurrentCycle();
+    final pastCycles = await getPastCycles();
+
+    final Map<DateTime, List<TreatmentEvent>> result = {};
+
+    // 모든 사이클의 이벤트 수집
+    final allCycles = [currentCycle, ...pastCycles];
+
+    for (final cycle in allCycles) {
+      for (final event in cycle.events) {
+        final eventDate = DateTime(event.date.year, event.date.month, event.date.day);
+
+        // 날짜 범위 체크
+        if (eventDate.isBefore(startDate) || eventDate.isAfter(endDate)) {
+          continue;
+        }
+
+        result.putIfAbsent(eventDate, () => []);
+        result[eventDate]!.add(event);
+      }
+    }
+
+    return result;
+  }
+
+  /// 특정 날짜의 이벤트 조회
+  static Future<List<TreatmentEvent>> getEventsByDate(DateTime date) async {
+    final dateKey = DateTime(date.year, date.month, date.day);
+    final events = await getEventsByDateRange(dateKey, dateKey);
+    return events[dateKey] ?? [];
+  }
+
+  /// 날짜 범위 내의 사이클 결과 조회 (캘린더 연동용)
+  static Future<Map<DateTime, CycleResult>> getCycleResultsByDateRange(
+    DateTime startDate,
+    DateTime endDate,
+  ) async {
+    final currentCycle = await getCurrentCycle();
+    final pastCycles = await getPastCycles();
+
+    final Map<DateTime, CycleResult> result = {};
+
+    final allCycles = [currentCycle, ...pastCycles];
+
+    for (final cycle in allCycles) {
+      if (cycle.result != null && cycle.endDate != null) {
+        final endDateKey = DateTime(cycle.endDate!.year, cycle.endDate!.month, cycle.endDate!.day);
+        if (!endDateKey.isBefore(startDate) && !endDateKey.isAfter(endDate)) {
+          result[endDateKey] = cycle.result!;
+        }
+      }
+    }
+
+    return result;
   }
 
   /// 샘플 데이터 생성 (테스트용)
-  static Future<SimpleTreatmentCycle> createSampleData() async {
+  static Future<TreatmentCycle> createSampleData() async {
     final now = DateTime.now();
 
-    final sampleCycle = SimpleTreatmentCycle(
+    final sampleCycle = TreatmentCycle(
       id: now.millisecondsSinceEpoch.toString(),
       cycleNumber: 1,
-      attemptNumber: 1,
       startDate: now.subtract(const Duration(days: 21)),
-      stages: [
-        SimpleTreatmentStage(
-          type: SimpleStageType.stimulation,
-          startDate: now.subtract(const Duration(days: 21)),
+      events: [
+        TreatmentEvent(
+          id: '${now.millisecondsSinceEpoch}_1',
+          type: EventType.stimulation,
+          date: now.subtract(const Duration(days: 21)),
+          memo: '첫 주사 시작',
         ),
-        SimpleTreatmentStage(
-          type: SimpleStageType.retrieval,
+        TreatmentEvent(
+          id: '${now.millisecondsSinceEpoch}_2',
+          type: EventType.retrieval,
           date: now.subtract(const Duration(days: 10)),
-          count: 6,
+          count: 8,
+          memo: '컨디션 좋았음',
         ),
-        SimpleTreatmentStage(
-          type: SimpleStageType.waiting,
-          startDate: now.subtract(const Duration(days: 9)),
+        TreatmentEvent(
+          id: '${now.millisecondsSinceEpoch}_3',
+          type: EventType.transfer,
+          date: now.subtract(const Duration(days: 5)),
           count: 2,
+          embryoDays: 5,
         ),
-        SimpleTreatmentStage(
-          type: SimpleStageType.transfer,
-        ),
-        SimpleTreatmentStage(
-          type: SimpleStageType.result,
+        TreatmentEvent(
+          id: '${now.millisecondsSinceEpoch}_4',
+          type: EventType.freezing,
+          date: now.subtract(const Duration(days: 5)),
+          count: 4,
+          embryoDays: 5,
         ),
       ],
     );
 
     await saveCurrentCycle(sampleCycle);
     return sampleCycle;
+  }
+
+  // ============================================================
+  // 레거시 호환성 메서드 (기존 코드와 호환)
+  // ============================================================
+
+  /// @deprecated Use addEvent or updateEvent instead
+  static Future<SimpleTreatmentCycle> updateStage(
+      SimpleTreatmentStage stage) async {
+    // 레거시 코드 호환 - 실제로는 이벤트 추가/업데이트로 처리
+    final currentCycle = await getCurrentCycle();
+
+    // 기존 이벤트 찾기
+    final existingEvent = currentCycle.events
+        .where((e) => e.type == stage.type)
+        .firstOrNull;
+
+    if (stage.hasDate) {
+      final event = TreatmentEvent(
+        id: existingEvent?.id ??
+            DateTime.now().millisecondsSinceEpoch.toString(),
+        type: stage.type,
+        date: stage.date ?? stage.startDate!,
+        count: stage.count,
+        embryoDays: stage.cultureDay,
+        memo: stage.memo,
+      );
+
+      if (existingEvent != null) {
+        await updateEvent(event);
+      } else {
+        await addEvent(event);
+      }
+    }
+
+    // 레거시 형태로 반환
+    return SimpleTreatmentCycle.create(cycleNumber: currentCycle.cycleNumber);
   }
 }

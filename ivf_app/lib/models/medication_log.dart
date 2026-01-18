@@ -11,7 +11,7 @@ enum MedicationType {
   pill,       // 알약 💊
   injection,  // 주사 💉
   suppository,// 질정 ⚪
-  patch,      // 패치 🩹
+  patch,      // 한약 🍵 (기존 patch 유지 - DB 호환성)
 }
 
 /// 약물 복용/주사 로그
@@ -82,7 +82,7 @@ class MedicationLog {
       case MedicationType.suppository:
         return '⚪';
       case MedicationType.patch:
-        return '🩹';
+        return '🍵';
     }
   }
 

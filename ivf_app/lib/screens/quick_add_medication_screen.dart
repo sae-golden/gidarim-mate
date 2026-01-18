@@ -5,6 +5,9 @@ import '../constants/app_spacing.dart';
 import '../widgets/app_button.dart';
 import '../models/medication.dart';
 import '../services/ivf_medication_matcher.dart';
+import '../services/medication_storage_service.dart';
+import '../services/notification_scheduler_service.dart';
+import '../services/cloud_storage_service.dart';
 
 /// 시간대 슬롯
 enum TimeSlot {
@@ -90,9 +93,14 @@ extension QuickDatePatternExtension on QuickDatePattern {
   }
 }
 
-/// 단일 페이지 약물 추가 화면
+/// 단일 페이지 약물 추가/수정 화면
 class QuickAddMedicationScreen extends StatefulWidget {
-  const QuickAddMedicationScreen({super.key});
+  final Medication? editingMedication; // 수정할 약물 (null이면 새로 추가)
+
+  const QuickAddMedicationScreen({
+    super.key,
+    this.editingMedication,
+  });
 
   @override
   State<QuickAddMedicationScreen> createState() =>
@@ -107,7 +115,6 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
   final _nameFieldKey = GlobalKey(); // 입력 필드 위치 추적
   List<IvfMedicationData> _suggestions = [];
   bool _showSuggestions = false;
-  IvfMedicationData? _selectedMedication;
 
   // 종류
   MedicationFormType _formType = MedicationFormType.injection;
@@ -123,17 +130,130 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
   // 기본 수량 (새로 추가되는 시간대에 적용)
   int _quantity = 1;
 
+  // 저장 중 상태 (중복 클릭 방지)
+  bool _isSaving = false;
+
+  // Validation 에러 상태
+  String? _nameError;
+
+  // 수정 모드 여부
+  bool get _isEditMode => widget.editingMedication != null;
+
   @override
   void initState() {
     super.initState();
     _nameController.addListener(_onNameChanged);
     _nameFocusNode.addListener(_onFocusChanged);
-    _initDefaultDates();
+
+    if (_isEditMode) {
+      _loadEditingMedication();
+    } else {
+      _initDefaultDates();
+    }
   }
 
   void _initDefaultDates() {
-    // 기본값: 아무것도 선택 안 됨
-    // _selectedDates는 이미 빈 Set으로 초기화됨
+    // 기본값: 오늘 날짜 선택
+    final today = DateTime.now();
+    _selectedDates.add(DateTime(today.year, today.month, today.day));
+  }
+
+  /// 수정 모드: 기존 약물 데이터 로드
+  void _loadEditingMedication() {
+    final med = widget.editingMedication!;
+
+    // 약물명
+    _nameController.text = med.name;
+
+    // 타입 변환
+    switch (med.type) {
+      case MedicationType.injection:
+        _formType = MedicationFormType.injection;
+        break;
+      case MedicationType.oral:
+        _formType = MedicationFormType.oral;
+        break;
+      case MedicationType.suppository:
+        _formType = MedicationFormType.vaginal;
+        break;
+      case MedicationType.patch:
+        _formType = MedicationFormType.patch;
+        break;
+    }
+
+    // 시간 파싱
+    final timeParts = med.time.split(':');
+    if (timeParts.length == 2) {
+      final hour = int.tryParse(timeParts[0]) ?? 8;
+      final minute = int.tryParse(timeParts[1]) ?? 0;
+      final time = TimeOfDay(hour: hour, minute: minute);
+
+      // 시간대 결정
+      TimeSlot slot;
+      if (hour < 10) {
+        slot = TimeSlot.morning;
+      } else if (hour < 14) {
+        slot = TimeSlot.noon;
+      } else if (hour < 20) {
+        slot = TimeSlot.evening;
+      } else {
+        slot = TimeSlot.night;
+      }
+
+      _selectedTimes[slot] = DoseTime(slot: slot, time: time, quantity: 1);
+    }
+
+    // 패턴
+    switch (med.pattern) {
+      case '매일':
+        _datePattern = QuickDatePattern.daily;
+        break;
+      case '격일':
+        _datePattern = QuickDatePattern.everyOther;
+        break;
+      case '월수금':
+        _datePattern = QuickDatePattern.monWedFri;
+        break;
+      case '화목토':
+        _datePattern = QuickDatePattern.tueThuSat;
+        break;
+      default:
+        _datePattern = QuickDatePattern.custom;
+    }
+
+    // 날짜 범위 설정
+    _displayMonth = med.startDate;
+    _selectedDates = {};
+
+    // 시작일부터 종료일까지 패턴에 맞게 날짜 추가
+    DateTime current = DateTime(med.startDate.year, med.startDate.month, med.startDate.day);
+    final end = DateTime(med.endDate.year, med.endDate.month, med.endDate.day);
+
+    while (!current.isAfter(end)) {
+      bool shouldAdd = false;
+      switch (_datePattern) {
+        case QuickDatePattern.daily:
+          shouldAdd = true;
+          break;
+        case QuickDatePattern.everyOther:
+          final diff = current.difference(DateTime(med.startDate.year, med.startDate.month, med.startDate.day)).inDays;
+          shouldAdd = diff % 2 == 0;
+          break;
+        case QuickDatePattern.monWedFri:
+          shouldAdd = current.weekday == 1 || current.weekday == 3 || current.weekday == 5;
+          break;
+        case QuickDatePattern.tueThuSat:
+          shouldAdd = current.weekday == 2 || current.weekday == 4 || current.weekday == 6;
+          break;
+        case QuickDatePattern.custom:
+          shouldAdd = true;
+          break;
+      }
+      if (shouldAdd) {
+        _selectedDates.add(current);
+      }
+      current = current.add(const Duration(days: 1));
+    }
   }
 
   void _onNameChanged() {
@@ -178,11 +298,23 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
   void _selectMedication(IvfMedicationData medication) {
     setState(() {
       _nameController.text = medication.name;
-      _selectedMedication = medication;
       _formType = medication.type;
       _showSuggestions = false;
+      _nameError = null; // 선택 시 에러 제거
     });
     _nameFocusNode.unfocus();
+  }
+
+  /// 약물명 필드로 스크롤 (validation 실패 시)
+  void _scrollToNameField() {
+    // 맨 위로 스크롤
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+    // 포커스 설정
+    _nameFocusNode.requestFocus();
   }
 
   @override
@@ -210,15 +342,23 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('💊', style: TextStyle(fontSize: 20)),
+            Text(_isEditMode ? '✏️' : '💊', style: const TextStyle(fontSize: 20)),
             const SizedBox(width: 8),
             Text(
-              '약물 추가',
+              _isEditMode ? '약물 수정' : '약물 추가',
               style: AppTextStyles.h3.copyWith(color: AppColors.textPrimary),
             ),
           ],
         ),
         centerTitle: true,
+        actions: _isEditMode
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                  onPressed: _showDeleteConfirmDialog,
+                ),
+              ]
+            : null,
       ),
       body: Column(
         children: [
@@ -281,11 +421,20 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(
+              color: _nameError != null ? AppColors.error : AppColors.border,
+              width: _nameError != null ? 1.5 : 1,
+            ),
           ),
           child: TextField(
             controller: _nameController,
             focusNode: _nameFocusNode,
+            onChanged: (_) {
+              // 입력 시 에러 메시지 제거
+              if (_nameError != null) {
+                setState(() => _nameError = null);
+              }
+            },
             decoration: InputDecoration(
               hintText: '검색 또는 직접 입력',
               hintStyle: TextStyle(color: AppColors.textDisabled),
@@ -298,6 +447,18 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
             ),
           ),
         ),
+        // 에러 메시지
+        if (_nameError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 4),
+            child: Text(
+              _nameError!,
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.error,
+              ),
+            ),
+          ),
 
         // 자동완성 목록
         if (_showSuggestions && _suggestions.isNotEmpty)
@@ -583,104 +744,114 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
               return Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
                       children: [
-                        // 시간대 아이콘 + 라벨
-                        Text(slot.emoji, style: const TextStyle(fontSize: 20)),
-                        const SizedBox(width: 8),
-                        Text(
-                          slot.label,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-
-                        // 시간 조정
-                        IconButton(
-                          onPressed: () {
-                            setState(() {
-                              final newHour = (doseTime.time.hour - 1) % 24;
-                              doseTime.time = TimeOfDay(hour: newHour, minute: doseTime.time.minute);
-                            });
-                          },
-                          icon: const Icon(Icons.remove_circle_outline, size: 20),
-                          color: AppColors.textSecondary,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                        ),
-                        GestureDetector(
-                          onTap: () async {
-                            final picked = await showTimePicker(
-                              context: context,
-                              initialTime: doseTime.time,
-                            );
-                            if (picked != null) {
-                              setState(() => doseTime.time = picked);
-                            }
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryPurpleLight,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '${doseTime.time.hour.toString().padLeft(2, '0')}:${doseTime.time.minute.toString().padLeft(2, '0')}',
+                        // 1줄: 시간대 + 시간/수량 조정 (한 줄에 통합)
+                        Row(
+                          children: [
+                            // 시간대 아이콘 + 라벨
+                            Text(slot.emoji, style: const TextStyle(fontSize: 18)),
+                            const SizedBox(width: 6),
+                            Text(
+                              slot.label,
                               style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primaryPurple,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () {
-                            setState(() {
-                              final newHour = (doseTime.time.hour + 1) % 24;
-                              doseTime.time = TimeOfDay(hour: newHour, minute: doseTime.time.minute);
-                            });
-                          },
-                          icon: const Icon(Icons.add_circle_outline, size: 20),
-                          color: AppColors.textSecondary,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                        ),
-
-                        const Spacer(),
-
-                        // 수량 조정
-                        IconButton(
-                          onPressed: doseTime.quantity > 1
-                              ? () => setState(() => doseTime.quantity--)
-                              : null,
-                          icon: const Icon(Icons.remove_circle_outline, size: 20),
-                          color: doseTime.quantity > 1
-                              ? AppColors.primaryPurple
-                              : AppColors.textDisabled,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                        ),
-                        Container(
-                          width: 50,
-                          alignment: Alignment.center,
-                          child: Text(
-                            '${doseTime.quantity}${_formType.unit}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
+                            const Spacer(),
+                            // 시간 조정 (컴팩트)
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  final newHour = (doseTime.time.hour - 1) % 24;
+                                  doseTime.time = TimeOfDay(hour: newHour, minute: doseTime.time.minute);
+                                });
+                              },
+                              child: const Padding(
+                                padding: EdgeInsets.all(4),
+                                child: Icon(Icons.remove_circle_outline, size: 18, color: AppColors.textSecondary),
+                              ),
                             ),
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => setState(() => doseTime.quantity++),
-                          icon: const Icon(Icons.add_circle_outline, size: 20),
-                          color: AppColors.primaryPurple,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                            GestureDetector(
+                              onTap: () async {
+                                final picked = await showTimePicker(
+                                  context: context,
+                                  initialTime: doseTime.time,
+                                );
+                                if (picked != null) {
+                                  setState(() => doseTime.time = picked);
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryPurpleLight,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '${doseTime.time.hour.toString().padLeft(2, '0')}:${doseTime.time.minute.toString().padLeft(2, '0')}',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primaryPurple,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  final newHour = (doseTime.time.hour + 1) % 24;
+                                  doseTime.time = TimeOfDay(hour: newHour, minute: doseTime.time.minute);
+                                });
+                              },
+                              child: const Padding(
+                                padding: EdgeInsets.all(4),
+                                child: Icon(Icons.add_circle_outline, size: 18, color: AppColors.textSecondary),
+                              ),
+                            ),
+                            // 구분선
+                            Container(
+                              width: 1,
+                              height: 20,
+                              margin: const EdgeInsets.symmetric(horizontal: 6),
+                              color: AppColors.border,
+                            ),
+                            // 수량 조정 (컴팩트)
+                            GestureDetector(
+                              onTap: doseTime.quantity > 1
+                                  ? () => setState(() => doseTime.quantity--)
+                                  : null,
+                              child: Padding(
+                                padding: const EdgeInsets.all(4),
+                                child: Icon(
+                                  Icons.remove_circle_outline,
+                                  size: 18,
+                                  color: doseTime.quantity > 1 ? AppColors.primaryPurple : AppColors.textDisabled,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              width: 36,
+                              alignment: Alignment.center,
+                              child: Text(
+                                '${doseTime.quantity}${_formType.unit}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () => setState(() => doseTime.quantity++),
+                              child: const Padding(
+                                padding: EdgeInsets.all(4),
+                                child: Icon(Icons.add_circle_outline, size: 18, color: AppColors.primaryPurple),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -741,48 +912,6 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
           ),
       ],
     );
-  }
-
-  void _applyDatePattern(QuickDatePattern pattern) {
-    _selectedDates.clear();
-    final now = DateTime.now();
-    final startDate = DateTime(now.year, now.month, now.day);
-
-    switch (pattern) {
-      case QuickDatePattern.daily:
-        for (int i = 0; i < 14; i++) {
-          _selectedDates.add(startDate.add(Duration(days: i)));
-        }
-        break;
-      case QuickDatePattern.everyOther:
-        for (int i = 0; i < 14; i += 2) {
-          _selectedDates.add(startDate.add(Duration(days: i)));
-        }
-        break;
-      case QuickDatePattern.monWedFri:
-        for (int i = 0; i < 28; i++) {
-          final date = startDate.add(Duration(days: i));
-          if (date.weekday == DateTime.monday ||
-              date.weekday == DateTime.wednesday ||
-              date.weekday == DateTime.friday) {
-            _selectedDates.add(date);
-          }
-        }
-        break;
-      case QuickDatePattern.tueThuSat:
-        for (int i = 0; i < 28; i++) {
-          final date = startDate.add(Duration(days: i));
-          if (date.weekday == DateTime.tuesday ||
-              date.weekday == DateTime.thursday ||
-              date.weekday == DateTime.saturday) {
-            _selectedDates.add(date);
-          }
-        }
-        break;
-      case QuickDatePattern.custom:
-        // 직접 선택 - 기존 선택 유지
-        break;
-    }
   }
 
   Widget _buildMiniCalendar() {
@@ -936,10 +1065,7 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
 
   // ==================== 저장 버튼 ====================
   Widget _buildSaveButton() {
-    final isValid = _nameController.text.isNotEmpty &&
-        _selectedTimes.isNotEmpty &&
-        _selectedDates.isNotEmpty;
-
+    // 저장 버튼은 항상 활성화 (validation은 _saveMedication에서 수행)
     return Container(
       padding: const EdgeInsets.all(AppSpacing.m),
       decoration: BoxDecoration(
@@ -954,24 +1080,59 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
       ),
       child: SafeArea(
         child: AppButton(
-          text: '저장',
-          onPressed: isValid ? _saveMedication : null,
+          text: _isSaving ? '저장 중...' : '저장',
+          onPressed: _isSaving ? null : _saveMedication,
         ),
       ),
     );
   }
 
-  void _saveMedication() {
-    // 첫 번째 선택된 시간 사용
-    final sortedTimes = _selectedTimes.entries.toList()
-      ..sort((a, b) => a.key.index.compareTo(b.key.index));
-    final firstTime = sortedTimes.first.value.time;
-    final timeString = '${firstTime.hour.toString().padLeft(2, '0')}:${firstTime.minute.toString().padLeft(2, '0')}';
+  Future<void> _saveMedication() async {
+    // 중복 클릭 방지
+    if (_isSaving) return;
 
-    // 하루 총 수량 계산
-    int dailyTotal = 0;
-    for (final entry in sortedTimes) {
-      dailyTotal += entry.value.quantity;
+    // Validation: 약물명 필수
+    if (_nameController.text.trim().isEmpty) {
+      setState(() => _nameError = '약 이름을 알려주세요');
+      // 약물명 필드로 스크롤
+      _scrollToNameField();
+      return;
+    }
+
+    // Validation: 복용일 필수
+    if (_selectedDates.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('복용일을 선택해 주세요'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    // 시간 및 수량 계산
+    String timeString;
+    int dailyTotal;
+
+    if (_selectedTimes.isNotEmpty) {
+      // 선택된 시간대가 있는 경우
+      final sortedTimes = _selectedTimes.entries.toList()
+        ..sort((a, b) => a.key.index.compareTo(b.key.index));
+      final firstTime = sortedTimes.first.value.time;
+      timeString = '${firstTime.hour.toString().padLeft(2, '0')}:${firstTime.minute.toString().padLeft(2, '0')}';
+
+      dailyTotal = 0;
+      for (final entry in sortedTimes) {
+        dailyTotal += entry.value.quantity;
+      }
+    } else {
+      // 시간대 미선택 시 기본값
+      timeString = '09:00';
+      dailyTotal = _quantity;
     }
 
     // 패턴 문자열 생성
@@ -999,12 +1160,29 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
     final startDate = sortedDates.first;
     final endDate = sortedDates.last;
 
+    // MedicationType 변환
+    MedicationType medicationType;
+    switch (_formType) {
+      case MedicationFormType.injection:
+        medicationType = MedicationType.injection;
+        break;
+      case MedicationFormType.oral:
+        medicationType = MedicationType.oral;
+        break;
+      case MedicationFormType.vaginal:
+        medicationType = MedicationType.suppository;
+        break;
+      case MedicationFormType.patch:
+        medicationType = MedicationType.patch;
+        break;
+    }
+
     final medication = Medication(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: _isEditMode
+          ? widget.editingMedication!.id
+          : DateTime.now().millisecondsSinceEpoch.toString(),
       name: _nameController.text,
-      type: _formType == MedicationFormType.injection
-          ? MedicationType.injection
-          : MedicationType.oral,
+      type: medicationType,
       time: timeString,
       pattern: pattern,
       startDate: startDate,
@@ -1013,6 +1191,131 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
       totalCount: _selectedDates.length * dailyTotal,
     );
 
-    Navigator.pop(context, medication);
+    // 로컬 저장소에 저장
+    try {
+      if (_isEditMode) {
+        // 수정 모드: 로컬 + 클라우드 직접 업데이트
+        await MedicationStorageService.updateMedication(medication, addToSyncQueue: false);
+
+        // 클라우드에 직접 업데이트 (로그인 상태일 때)
+        if (CloudStorageService.isLoggedIn) {
+          await CloudStorageService.addMedication(medication); // upsert로 동작
+        }
+
+        // 기존 알림 취소 후 새로 스케줄링
+        await NotificationSchedulerService.cancelMedicationNotification(medication.id);
+      } else {
+        // 새로 추가: 로컬 + 클라우드 직접 추가 (SyncQueue 사용 안함)
+        await MedicationStorageService.addMedication(medication, addToSyncQueue: false);
+
+        // 클라우드에 직접 추가 (로그인 상태일 때)
+        if (CloudStorageService.isLoggedIn) {
+          await CloudStorageService.addMedication(medication);
+        }
+      }
+
+      // 알림 스케줄링
+      await NotificationSchedulerService.scheduleMedication(medication);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_isEditMode
+                ? '${medication.name}이(가) 수정되었습니다'
+                : '${medication.name}이(가) 추가되었습니다'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.pop(context, medication);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('저장 실패: $e'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      // 저장 상태 리셋 (에러 발생 시 다시 시도 가능하도록)
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  /// 삭제 확인 다이얼로그
+  void _showDeleteConfirmDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('약물 삭제'),
+        content: Text('${widget.editingMedication!.name}을(를) 삭제하시겠어요?\n\n이 작업은 되돌릴 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              '취소',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context); // 다이얼로그 닫기
+              await _deleteMedication(); // 삭제 완료까지 대기
+            },
+            child: const Text(
+              '삭제',
+              style: TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 약물 삭제
+  Future<void> _deleteMedication() async {
+    try {
+      final medicationId = widget.editingMedication!.id;
+
+      // 1. 로컬에서 삭제
+      await MedicationStorageService.deleteMedication(medicationId, addToSyncQueue: false);
+
+      // 2. 클라우드에서 즉시 삭제 (로그인 상태일 때)
+      if (CloudStorageService.isLoggedIn) {
+        await CloudStorageService.deleteMedication(medicationId);
+      }
+
+      // 3. 알림 취소
+      await NotificationSchedulerService.cancelMedicationNotification(medicationId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${widget.editingMedication!.name}이(가) 삭제되었습니다'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.pop(context, 'deleted');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('삭제 실패: $e'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 }

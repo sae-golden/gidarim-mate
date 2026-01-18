@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>시험관메이트 - 리마인드 알람</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(180deg, #FFF7ED 0%, #FFFFFF 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 24px;
+    }
+    
+    .alarm-container {
+      width: 100%;
+      max-width: 380px;
+      text-align: center;
+    }
+    
+    /* 리마인드 배지 */
+    .reminder-badge {
+      display: inline-block;
+      background: #FEF3C7;
+      color: #B45309;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 24px;
+    }
+    
+    /* 시간 표시 */
+    .time {
+      font-size: 48px;
+      font-weight: 300;
+      color: #333;
+      margin-bottom: 8px;
+    }
+    
+    .date {
+      font-size: 16px;
+      color: #888;
+      margin-bottom: 32px;
+    }
+    
+    /* 아이콘 */
+    .icon-wrapper {
+      width: 100px;
+      height: 100px;
+      background: linear-gradient(135deg, #FED7AA 0%, #FDBA74 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      animation: shake 0.5s ease-in-out infinite;
+    }
+    
+    @keyframes shake {
+      0%, 100% { transform: rotate(-3deg); }
+      50% { transform: rotate(3deg); }
+    }
+    
+    .icon {
+      font-size: 48px;
+    }
+    
+    /* 메시지 */
+    .reminder-message {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+    
+    .medication-name {
+      font-size: 24px;
+      font-weight: 600;
+      color: #9B7ED9;
+      margin-bottom: 8px;
+    }
+    
+    .medication-detail {
+      font-size: 16px;
+      color: #666;
+      margin-bottom: 48px;
+    }
+    
+    /* 버튼 */
+    .button-container {
+      width: 100%;
+    }
+    
+    .btn-complete {
+      width: 100%;
+      padding: 18px;
+      font-size: 18px;
+      font-weight: 600;
+      color: white;
+      background: linear-gradient(135deg, #FB923C 0%, #F97316 100%);
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      margin-bottom: 16px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .btn-complete:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(249, 115, 22, 0.4);
+    }
+    
+    .btn-snooze {
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="alarm-container">
+    <div class="reminder-badge">⚠️ 아직 복용 전이에요</div>
+    
+    <div class="time">오후 6:05</div>
+    <div class="date">1월 6일 월요일</div>
+    
+    <div class="icon-wrapper">
+      <span class="icon">💊</span>
+    </div>
+    
+    <div class="reminder-message">잊지 않으셨죠?</div>
+    <div class="medication-name">프로기노바</div>
+    <div class="medication-detail">3알 복용</div>
+    
+    <div class="button-container">
+      <button class="btn-complete">먹었어요</button>
+      <button class="btn-snooze">조금 이따 알려줘</button>
+    </div>
+  </div>
+
+</body>
+</html>

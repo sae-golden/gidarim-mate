@@ -1,7 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/onboarding_checklist.dart';
 import 'hospital_service.dart';
 import 'notification_service.dart';
+import 'medication_storage_service.dart';
+import 'cloud_storage_service.dart';
 
 /// 온보딩 체크리스트 서비스
 class OnboardingService {
@@ -20,12 +23,19 @@ class OnboardingService {
     final isNotificationEnabled =
         await NotificationService.isNotificationEnabled();
 
-    // 약 등록 여부 (SharedPreferences에서 확인)
-    final hasMedication = prefs.getBool(_hasMedicationKey) ?? false;
+    // 약 등록 여부 (실제 저장된 약물이 있는지 확인)
+    final medications = await MedicationStorageService.getAllMedications();
+    final hasMedication = medications.isNotEmpty;
 
     // 치료 단계 설정 여부
     final treatmentStageIndex = prefs.getInt(_treatmentStageKey);
     final hasTreatmentStage = treatmentStageIndex != null;
+
+    debugPrint('📋 온보딩 체크리스트 상태:');
+    debugPrint('   - 병원 등록: $isHospitalRegistered');
+    debugPrint('   - 알림 활성화: $isNotificationEnabled');
+    debugPrint('   - 약물 등록: $hasMedication (${medications.length}개)');
+    debugPrint('   - 치료 단계: $hasTreatmentStage (index: $treatmentStageIndex)');
 
     return OnboardingChecklist(
       isHospitalRegistered: isHospitalRegistered,
@@ -35,10 +45,18 @@ class OnboardingService {
     );
   }
 
-  /// 치료 단계 저장
-  static Future<void> saveTreatmentStage(OnboardingTreatmentStage stage) async {
+  /// 치료 단계 저장 (로컬 + 클라우드)
+  static Future<void> saveTreatmentStage(OnboardingTreatmentStage stage, {bool syncToCloud = true}) async {
+    // 1. 로컬 저장
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_treatmentStageKey, stage.index);
+    debugPrint('✅ 치료 단계 로컬 저장: ${stage.shortTitle}');
+
+    // 2. 클라우드 저장 (로그인된 경우)
+    if (syncToCloud && CloudStorageService.isLoggedIn) {
+      await CloudStorageService.saveTreatmentStage(stage.index);
+      debugPrint('☁️ 치료 단계 클라우드 저장: ${stage.index}');
+    }
   }
 
   /// 치료 단계 조회

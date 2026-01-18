@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -184,21 +185,21 @@ JSON 배열만 반환하고 다른 텍스트는 포함하지 마.
   /// API 키가 설정되어 있는지 확인
   static bool get isConfigured {
     final apiKey = dotenv.env['GEMINI_API_KEY'];
-    debugPrint('🔑 GEMINI_API_KEY: ${apiKey?.substring(0, apiKey.length > 10 ? 10 : apiKey.length) ?? "null"}...');
+
     // 플레이스홀더나 빈 값 체크
     if (apiKey == null || apiKey.isEmpty) {
-      debugPrint('❌ API 키 없음');
+      if (kDebugMode) debugPrint('❌ Gemini API 키 없음');
       return false;
     }
     if (apiKey.contains('여기에') || apiKey.contains('API_키')) {
-      debugPrint('❌ 플레이스홀더 키');
+      if (kDebugMode) debugPrint('❌ Gemini 플레이스홀더 키');
       return false;
     }
     if (!apiKey.startsWith('AIza')) {
-      debugPrint('❌ 잘못된 키 형식');
+      if (kDebugMode) debugPrint('❌ Gemini 잘못된 키 형식');
       return false;
     }
-    debugPrint('✅ API 키 유효');
+    if (kDebugMode) debugPrint('✅ Gemini API 키 유효');
     return true;
   }
 }

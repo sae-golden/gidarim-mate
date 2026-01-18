@@ -1,5 +1,5 @@
 name: ivf_app
-description: "A new Flutter project."
+description: "기다림메이트 - 난임 시술 약물 알림 앱"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -84,8 +84,22 @@ dependencies:
   # 알람 (끌 때까지 울림, 화면 켜짐)
   alarm: ^4.1.0
 
+  # 잠금화면 위 표시
+  flutter_show_when_locked: ^1.0.0
+
   # Gemini AI (음성 입력 파싱용)
   google_generative_ai: ^0.4.7
+
+  # 네트워크 연결 상태 확인
+  connectivity_plus: ^6.1.1
+  home_widget: ^0.8.1
+
+  # 인앱 리뷰 (스토어 리뷰 유도)
+  in_app_review: ^2.0.10
+
+  # 패키지/디바이스 정보 (피드백용)
+  package_info_plus: ^8.1.3
+  device_info_plus: ^11.2.0
 
 dev_dependencies:
   flutter_test:

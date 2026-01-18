@@ -71,6 +71,7 @@ class _HospitalInfoScreenState extends State<HospitalInfoScreen> {
           ),
         ),
       );
+      Navigator.pop(context);  // 저장 후 이전 화면으로 이동
     }
   }
 
@@ -103,7 +104,7 @@ class _HospitalInfoScreenState extends State<HospitalInfoScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('전화번호가 없습니다'),
-          backgroundColor: AppColors.error,
+          backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),

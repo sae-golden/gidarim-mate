@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>시험관메이트 - 풀스크린 알람 (여러 약물)</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(180deg, #F5F0FF 0%, #FFFFFF 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 24px;
+    }
+    
+    .alarm-container {
+      width: 100%;
+      max-width: 380px;
+      text-align: center;
+    }
+    
+    /* 시간 표시 */
+    .time {
+      font-size: 48px;
+      font-weight: 300;
+      color: #333;
+      margin-bottom: 8px;
+    }
+    
+    .date {
+      font-size: 16px;
+      color: #888;
+      margin-bottom: 32px;
+    }
+    
+    /* 여러 약물 카드 */
+    .multi-medication {
+      background: white;
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 32px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    
+    .multi-header {
+      font-size: 15px;
+      color: #888;
+      margin-bottom: 20px;
+    }
+    
+    .med-item {
+      display: flex;
+      align-items: center;
+      padding: 14px 0;
+      border-bottom: 1px solid #F3F4F6;
+    }
+    
+    .med-item:last-child {
+      border-bottom: none;
+    }
+    
+    .med-icon {
+      width: 44px;
+      height: 44px;
+      background: #F3E8FF;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 14px;
+      font-size: 22px;
+    }
+    
+    .med-icon.injection {
+      background: #DBEAFE;
+    }
+    
+    .med-icon.suppository {
+      background: #FCE7F3;
+    }
+    
+    .med-info {
+      flex: 1;
+      text-align: left;
+    }
+    
+    .med-name {
+      font-size: 17px;
+      font-weight: 500;
+      color: #333;
+    }
+    
+    .med-dose {
+      font-size: 14px;
+      color: #888;
+      margin-top: 2px;
+    }
+    
+    /* 버튼 */
+    .button-container {
+      width: 100%;
+    }
+    
+    .btn-complete {
+      width: 100%;
+      padding: 18px;
+      font-size: 18px;
+      font-weight: 600;
+      color: white;
+      background: linear-gradient(135deg, #A78BFA 0%, #9B7ED9 100%);
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      margin-bottom: 16px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .btn-complete:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(155, 126, 217, 0.4);
+    }
+    
+    .btn-snooze {
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="alarm-container">
+    <div class="time">오전 8:00</div>
+    <div class="date">1월 6일 월요일</div>
+    
+    <div class="multi-medication">
+      <div class="multi-header">지금 복용할 약이에요</div>
+      
+      <div class="med-item">
+        <div class="med-icon injection">💉</div>
+        <div class="med-info">
+          <div class="med-name">프로게스테론 주사</div>
+          <div class="med-dose">1대</div>
+        </div>
+      </div>
+      
+      <div class="med-item">
+        <div class="med-icon">💊</div>
+        <div class="med-info">
+          <div class="med-name">푸르기노바</div>
+          <div class="med-dose">3알</div>
+        </div>
+      </div>
+      
+      <div class="med-item">
+        <div class="med-icon suppository">💊</div>
+        <div class="med-info">
+          <div class="med-name">질정</div>
+          <div class="med-dose">1개</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="button-container">
+      <button class="btn-complete">모두 완료했어요</button>
+      <button class="btn-snooze">조금 이따 알려줘</button>
+    </div>
+  </div>
+
+</body>
+</html>

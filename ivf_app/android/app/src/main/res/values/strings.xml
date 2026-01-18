@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">IVF 약물 알림</string>
+    <string name="widget_name">오늘의 약</string>
+    <string name="widget_description">오늘 복용할 약물 목록을 확인하세요</string>
+</resources>

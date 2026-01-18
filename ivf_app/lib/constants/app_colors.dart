@@ -19,6 +19,7 @@ class AppColors {
   // Status Colors (상태색상)
   static const Color success = Color(0xFF10B981); // 완료, 성공 (초록)
   static const Color warning = Color(0xFFFFD9B3); // 주의, 알림
+  static const Color warningLight = Color(0xFFFFF4E5); // 주의 배경
   static const Color error = Color(0xFFFFB3B3); // 오류, 미완료
   static const Color info = Color(0xFFB3D9FF); // 정보
   

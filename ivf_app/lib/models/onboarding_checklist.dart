@@ -90,7 +90,7 @@ extension ChecklistItemExtension on ChecklistItem {
       case ChecklistItem.medication:
         return '첫 약 등록하기';
       case ChecklistItem.treatmentStage:
-        return '치료 단계 등록하기';
+        return '현재 단계 등록하기';
     }
   }
 
@@ -103,7 +103,7 @@ extension ChecklistItemExtension on ChecklistItem {
       case ChecklistItem.medication:
         return '복용 중인 약을 추가해요';
       case ChecklistItem.treatmentStage:
-        return '현재 치료 단계를 선택해요';
+        return '현재 단계를 선택해요';
     }
   }
 }

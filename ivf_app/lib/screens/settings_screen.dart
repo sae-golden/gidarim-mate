@@ -1,18 +1,23 @@
+import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
 import '../constants/app_spacing.dart';
 import '../widgets/app_card.dart';
 import '../services/supabase_service.dart';
-import '../services/notification_service.dart';
 import '../services/notification_settings_service.dart';
+import '../services/sync_service.dart';
+import '../services/medication_storage_service.dart';
 import '../models/notification_settings.dart' as settings_model;
-import 'medication_search_screen.dart';
 import 'auth_screen.dart';
 import 'hospital_info_screen.dart';
+import 'app_info_screen.dart';
+import '../widgets/confirm_bottom_sheet.dart';
 
-/// 설정 화면
+/// 설정 화면 (간소화 버전)
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -25,10 +30,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
       settings_model.NotificationSettings.defaultSettings;
   bool _isLoading = true;
 
+  // 동기화 관련 상태
+  SyncStatus _syncStatus = SyncStatus.idle;
+  DateTime? _lastSyncTime;
+  StreamSubscription<SyncStatus>? _syncStatusSubscription;
+
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    _loadSyncStatus();
+    _subscribeSyncStatus();
+  }
+
+  @override
+  void dispose() {
+    _syncStatusSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadSettings() async {
@@ -36,6 +54,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _settings = settings;
       _isLoading = false;
+    });
+  }
+
+  Future<void> _loadSyncStatus() async {
+    final lastSync = await MedicationStorageService.getLastSyncTime();
+    setState(() {
+      _syncStatus = SyncService.status;
+      _lastSyncTime = lastSync;
+    });
+  }
+
+  void _subscribeSyncStatus() {
+    _syncStatusSubscription = SyncService.statusStream.listen((status) {
+      setState(() {
+        _syncStatus = status;
+      });
+      if (status == SyncStatus.success || status == SyncStatus.failed) {
+        _loadSyncStatus();
+      }
     });
   }
 
@@ -48,6 +85,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isLoggedIn = SupabaseService.isLoggedIn;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -64,34 +103,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 알림 설정
-            _buildSectionTitle('알림 설정'),
+            // 내 정보
+            _buildSectionTitle('내 정보'),
             const SizedBox(height: AppSpacing.s),
-            _buildNotificationSettings(),
+            _buildMyInfoSection(),
             const SizedBox(height: AppSpacing.l),
 
-            // 약물 관리
-            _buildSectionTitle('약물 관리'),
+            // 알림
+            _buildSectionTitle('알림'),
             const SizedBox(height: AppSpacing.s),
-            _buildMedicationSettings(),
+            _buildNotificationSection(),
             const SizedBox(height: AppSpacing.l),
 
-            // 치료 정보
-            _buildSectionTitle('치료 정보'),
-            const SizedBox(height: AppSpacing.s),
-            _buildTreatmentInfo(),
-            const SizedBox(height: AppSpacing.l),
+            // 데이터 초기화 + 앱 정보
+            _buildDataAndAppInfoSection(),
 
-            // 계정 관리
-            _buildSectionTitle('계정'),
-            const SizedBox(height: AppSpacing.s),
-            _buildAccountSection(),
+            // 로그아웃 (로그인 상태일 때만)
+            if (isLoggedIn) ...[
+              const SizedBox(height: AppSpacing.xl),
+              Center(
+                child: TextButton(
+                  onPressed: _showLogoutConfirmDialog,
+                  child: Text(
+                    '로그아웃',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: AppSpacing.l),
-
-            // 앱 정보
-            _buildSectionTitle('앱 정보'),
-            const SizedBox(height: AppSpacing.s),
-            _buildAppInfo(),
           ],
         ),
       ),
@@ -111,7 +154,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildNotificationSettings() {
+  /// 내 정보 섹션
+  Widget _buildMyInfoSection() {
+    final isLoggedIn = SupabaseService.isLoggedIn;
+    final currentUser = SupabaseService.currentUser;
+
+    return AppCard(
+      child: Column(
+        children: [
+          // 계정 정보
+          if (isLoggedIn && currentUser != null) ...[
+            _buildAccountTile(currentUser.email ?? '알 수 없음'),
+          ] else ...[
+            _buildNavigationTile(
+              icon: Icons.person_outline,
+              title: '로그인 / 회원가입',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AuthScreen()),
+                );
+              },
+            ),
+          ],
+          const Divider(height: 1),
+          // 병원 정보
+          _buildNavigationTile(
+            icon: Icons.local_hospital_outlined,
+            title: '병원 정보',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const HospitalInfoScreen(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 알림 섹션 (간소화)
+  Widget _buildNotificationSection() {
     if (_isLoading) {
       return const AppCard(
         child: Center(
@@ -130,7 +216,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSwitchTile(
             icon: Icons.notifications_outlined,
             title: '알림 받기',
-            subtitle: '약물 복용 시간에 알림을 받습니다',
             value: _settings.isEnabled,
             onChanged: (value) {
               _updateSettings(_settings.copyWith(isEnabled: value));
@@ -138,115 +223,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(height: 1),
 
-          // 미리 알림
-          _buildSwitchTile(
+          // 미리 알림 (한 줄로 통합)
+          _buildSwitchWithValueTile(
             icon: Icons.alarm,
             title: '미리 알림',
-            subtitle: '복용 시간 전에 미리 알림을 받습니다',
+            valueText: '${_settings.preNotificationMinutes}분 전',
             value: _settings.preNotification,
             onChanged: (value) {
               _updateSettings(_settings.copyWith(preNotification: value));
             },
-          ),
-          if (_settings.preNotification) ...[
-            const Divider(height: 1),
-            _buildDropdownTile(
-              icon: Icons.timer_outlined,
-              title: '미리 알림 시간',
-              value: '${_settings.preNotificationMinutes}분 전',
-              options:
-                  settings_model.NotificationSettings.preNotificationOptions
-                      .map((m) => '$m분 전')
-                      .toList(),
-              onChanged: (value) {
-                final minutes = int.parse(value!.replaceAll('분 전', ''));
-                _updateSettings(
-                    _settings.copyWith(preNotificationMinutes: minutes));
-              },
-            ),
-          ],
-
-          // 구분선
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.s),
-            child: Divider(height: 1),
-          ),
-
-          // 알람 스타일 (끌 때까지 울림)
-          _buildSwitchTile(
-            icon: Icons.volume_up,
-            title: '알람 스타일 (끌 때까지 울림)',
-            subtitle: '화면이 켜지고 알람을 끌 때까지 울립니다',
-            value: _settings.alarmStyle,
-            onChanged: (value) {
-              _updateSettings(_settings.copyWith(alarmStyle: value));
-            },
+            onValueTap: _settings.preNotification ? _showPreNotificationPicker : null,
           ),
           const Divider(height: 1),
 
-          // 미완료 시 재알림
-          _buildSwitchTile(
+          // 재알림 (한 줄로 통합)
+          _buildSwitchWithValueTile(
             icon: Icons.refresh,
-            title: '미완료 시 재알림',
-            subtitle: '복용을 완료하지 않으면 다시 알려드려요',
+            title: '재알림',
+            valueText: '${_settings.repeatIntervalMinutes}분 후',
             value: _settings.repeatIfNotCompleted,
             onChanged: (value) {
               _updateSettings(_settings.copyWith(repeatIfNotCompleted: value));
             },
+            onValueTap: _settings.repeatIfNotCompleted ? _showRepeatIntervalPicker : null,
           ),
-          if (_settings.repeatIfNotCompleted) ...[
-            const Divider(height: 1),
-            _buildDropdownTile(
-              icon: Icons.timer,
-              title: '재알림 간격',
-              value: '${_settings.repeatIntervalMinutes}분 후',
-              options: settings_model.NotificationSettings.repeatIntervalOptions
-                  .map((m) => '$m분 후')
-                  .toList(),
-              onChanged: (value) {
-                final minutes = int.parse(value!.replaceAll('분 후', ''));
-                _updateSettings(
-                    _settings.copyWith(repeatIntervalMinutes: minutes));
-              },
-            ),
-          ],
-
-          // 힌트 메시지
-          if (_settings.repeatIfNotCompleted)
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.m),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.m),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryPurpleLight.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Text('💡', style: TextStyle(fontSize: 16)),
-                    const SizedBox(width: AppSpacing.s),
-                    Expanded(
-                      child: Text(
-                        '약 복용을 완료하지 않으면 ${_settings.repeatIntervalMinutes}분 후 다시 알려드려요',
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-          // 알림 테스트 버튼 (웹 제외)
-          if (!kIsWeb) ...[
+          // 잠금화면 설정 (Android만, 웹 제외)
+          if (!kIsWeb && Platform.isAndroid) ...[
             const Divider(height: 1),
             _buildNavigationTile(
-              icon: Icons.notifications_active,
-              title: '알림 테스트',
-              subtitle: '알림이 정상 작동하는지 확인',
-              onTap: _testNotification,
+              icon: Icons.lock_open_outlined,
+              title: '잠금화면 알림 설정',
+              onTap: _showLockScreenPermissionGuide,
             ),
           ],
         ],
@@ -254,218 +261,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _testNotification() async {
-    try {
-      await NotificationService.showTestNotification();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('테스트 알림을 보냈습니다!'),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('알림 전송 실패: $e'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-      }
-    }
-  }
-
-  Widget _buildMedicationSettings() {
-    return AppCard(
-      child: Column(
-        children: [
-          _buildNavigationTile(
-            icon: Icons.search,
-            title: '약물 정보 검색',
-            subtitle: 'IVF 관련 약물 효능/용법 확인',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const MedicationSearchScreen(),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTreatmentInfo() {
-    return AppCard(
-      child: Column(
-        children: [
-          _buildNavigationTile(
-            icon: Icons.local_hospital_outlined,
-            title: '병원 정보',
-            subtitle: '담당 병원 및 의사 정보',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const HospitalInfoScreen(),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAccountSection() {
+  /// 데이터 초기화 + 앱 정보 섹션 (통합)
+  Widget _buildDataAndAppInfoSection() {
     final isLoggedIn = SupabaseService.isLoggedIn;
-    final currentUser = SupabaseService.currentUser;
 
-    if (isLoggedIn && currentUser != null) {
-      return AppCard(
-        child: Column(
-          children: [
-            _buildInfoTile(
-              icon: Icons.email_outlined,
-              title: '로그인 계정',
-              value: currentUser.email ?? '알 수 없음',
-            ),
-            const Divider(height: 1),
-            _buildNavigationTile(
-              icon: Icons.logout,
-              title: '로그아웃',
-              subtitle: '다른 계정으로 로그인',
-              onTap: _showLogoutConfirmDialog,
-            ),
-          ],
-        ),
-      );
-    } else {
-      return AppCard(
-        child: _buildNavigationTile(
-          icon: Icons.login,
-          title: '로그인 / 회원가입',
-          subtitle: '데이터를 클라우드에 동기화하세요',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AuthScreen()),
-            );
-          },
-        ),
-      );
-    }
-  }
-
-  void _showLogoutConfirmDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text('로그아웃'),
-        content: const Text('정말 로그아웃하시겠어요?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              '취소',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _logout();
-            },
-            child: const Text(
-              '로그아웃',
-              style: TextStyle(color: AppColors.error),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _logout() async {
-    try {
-      await SupabaseService.signOut();
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const AuthScreen()),
-          (route) => false,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('로그아웃에 실패했습니다'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-      }
-    }
-  }
-
-  Widget _buildAppInfo() {
     return AppCard(
       child: Column(
         children: [
+          // 클라우드 동기화 (로그인 상태일 때만)
+          if (isLoggedIn) ...[
+            _buildSyncTile(),
+            const Divider(height: 1),
+          ],
+          // 데이터 초기화
           _buildNavigationTile(
-            icon: Icons.help_outline,
-            title: '도움말',
-            subtitle: '앱 사용법 안내',
-            onTap: () {},
+            icon: Icons.delete_outline,
+            title: '데이터 초기화',
+            onTap: isLoggedIn ? _showDeleteAllDataDialog : _showDeleteLocalDataDialog,
           ),
           const Divider(height: 1),
-          _buildNavigationTile(
-            icon: Icons.privacy_tip_outlined,
-            title: '개인정보 처리방침',
-            onTap: () {},
-          ),
-          const Divider(height: 1),
-          _buildNavigationTile(
-            icon: Icons.description_outlined,
-            title: '이용약관',
-            onTap: () {},
-          ),
-          const Divider(height: 1),
-          _buildInfoTile(
+          // 앱 정보
+          _buildInfoNavigationTile(
             icon: Icons.info_outline,
-            title: '앱 버전',
-            value: '1.0.0',
+            title: '앱 정보',
+            value: 'v1.0.0',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AppInfoScreen()),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSwitchTile({
-    required IconData icon,
-    required String title,
-    String? subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
+  // ==================== 위젯 빌더 ====================
+
+  /// 계정 타일 (이메일만 표시)
+  Widget _buildAccountTile(String email) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
       child: Row(
@@ -477,41 +312,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
               color: AppColors.primaryPurpleLight,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: AppColors.primaryPurple, size: 20),
+            child: const Icon(
+              Icons.person_outline,
+              color: AppColors.primaryPurple,
+              size: 20,
+            ),
           ),
           const SizedBox(width: AppSpacing.m),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppTextStyles.body),
-                if (subtitle != null)
-                  Text(
-                    subtitle,
-                    style: AppTextStyles.caption,
-                  ),
-              ],
+            child: Text(
+              email,
+              style: AppTextStyles.body,
+              overflow: TextOverflow.ellipsis,
             ),
-          ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeColor: AppColors.primaryPurple,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDropdownTile({
+  /// 스위치 타일
+  Widget _buildSwitchTile({
     required IconData icon,
     required String title,
-    required String value,
-    required List<String> options,
-    required ValueChanged<String?> onChanged,
+    required bool value,
+    required ValueChanged<bool> onChanged,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Row(
         children: [
           Container(
@@ -527,26 +355,130 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Expanded(
             child: Text(title, style: AppTextStyles.body),
           ),
-          DropdownButton<String>(
+          Switch(
             value: value,
-            items: options
-                .map((opt) => DropdownMenuItem(
-                      value: opt,
-                      child: Text(opt, style: AppTextStyles.body),
-                    ))
-                .toList(),
             onChanged: onChanged,
-            underline: const SizedBox(),
+            activeColor: AppColors.primaryPurple,
           ),
         ],
       ),
     );
   }
 
+  /// 스위치 + 값 표시 타일 (미리 알림, 재알림용)
+  Widget _buildSwitchWithValueTile({
+    required IconData icon,
+    required String title,
+    required String valueText,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    VoidCallback? onValueTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.primaryPurpleLight,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: AppColors.primaryPurple, size: 20),
+          ),
+          const SizedBox(width: AppSpacing.m),
+          Expanded(
+            child: Row(
+              children: [
+                Text(title, style: AppTextStyles.body),
+                if (value) ...[
+                  const Text(' · ', style: TextStyle(color: AppColors.textSecondary)),
+                  GestureDetector(
+                    onTap: onValueTap,
+                    child: Text(
+                      valueText,
+                      style: AppTextStyles.body.copyWith(
+                        color: AppColors.primaryPurple,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: AppColors.primaryPurple,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 동기화 타일 (탭하면 동기화)
+  Widget _buildSyncTile() {
+    String syncText = '방금 전';
+    if (_lastSyncTime != null) {
+      final diff = DateTime.now().difference(_lastSyncTime!);
+      if (diff.inMinutes < 1) {
+        syncText = '방금 전';
+      } else if (diff.inMinutes < 60) {
+        syncText = '${diff.inMinutes}분 전';
+      } else if (diff.inHours < 24) {
+        syncText = '${diff.inHours}시간 전';
+      } else {
+        syncText = '${diff.inDays}일 전';
+      }
+    }
+
+    final isSyncing = _syncStatus == SyncStatus.syncing;
+
+    return InkWell(
+      onTap: isSyncing ? null : _handleSync,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.primaryPurpleLight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: isSyncing
+                  ? const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(
+                      Icons.cloud_outlined,
+                      color: AppColors.primaryPurple,
+                      size: 20,
+                    ),
+            ),
+            const SizedBox(width: AppSpacing.m),
+            Expanded(
+              child: Text('클라우드 동기화', style: AppTextStyles.body),
+            ),
+            Text(
+              isSyncing ? '동기화 중...' : syncText,
+              style: AppTextStyles.caption.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 네비게이션 타일
   Widget _buildNavigationTile({
     required IconData icon,
     required String title,
-    String? subtitle,
     required VoidCallback onTap,
   }) {
     return InkWell(
@@ -566,15 +498,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(width: AppSpacing.m),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Text(title, style: AppTextStyles.body),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: AppColors.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 정보 + 네비게이션 타일 (앱 정보용)
+  Widget _buildInfoNavigationTile({
+    required IconData icon,
+    required String title,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.primaryPurpleLight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: AppColors.primaryPurple, size: 20),
+            ),
+            const SizedBox(width: AppSpacing.m),
+            Expanded(
+              child: Row(
                 children: [
                   Text(title, style: AppTextStyles.body),
-                  if (subtitle != null)
-                    Text(
-                      subtitle,
-                      style: AppTextStyles.caption,
+                  const Text(' · ', style: TextStyle(color: AppColors.textSecondary)),
+                  Text(
+                    value,
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.textSecondary,
                     ),
+                  ),
                 ],
               ),
             ),
@@ -588,374 +557,311 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildInfoTile({
-    required IconData icon,
-    required String title,
-    required String value,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.s),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.primaryPurpleLight,
+  // ==================== 액션 핸들러 ====================
+
+  void _showPreNotificationPicker() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(AppSpacing.m),
+              child: Text('미리 알림 시간', style: AppTextStyles.h3),
+            ),
+            ...settings_model.NotificationSettings.preNotificationOptions.map((minutes) {
+              return ListTile(
+                title: Text('$minutes분 전'),
+                trailing: _settings.preNotificationMinutes == minutes
+                    ? const Icon(Icons.check, color: AppColors.primaryPurple)
+                    : null,
+                onTap: () {
+                  _updateSettings(_settings.copyWith(preNotificationMinutes: minutes));
+                  Navigator.pop(context);
+                },
+              );
+            }),
+            const SizedBox(height: AppSpacing.m),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showRepeatIntervalPicker() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(AppSpacing.m),
+              child: Text('재알림 간격', style: AppTextStyles.h3),
+            ),
+            ...settings_model.NotificationSettings.repeatIntervalOptions.map((minutes) {
+              return ListTile(
+                title: Text('$minutes분 후'),
+                trailing: _settings.repeatIntervalMinutes == minutes
+                    ? const Icon(Icons.check, color: AppColors.primaryPurple)
+                    : null,
+                onTap: () {
+                  _updateSettings(_settings.copyWith(repeatIntervalMinutes: minutes));
+                  Navigator.pop(context);
+                },
+              );
+            }),
+            const SizedBox(height: AppSpacing.m),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleSync() async {
+    final result = await SyncService.syncAll();
+
+    if (mounted) {
+      if (result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('동기화 완료! ${result.syncedItems}개 항목'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: AppColors.primaryPurple, size: 20),
           ),
-          const SizedBox(width: AppSpacing.m),
-          Expanded(
-            child: Text(title, style: AppTextStyles.body),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.errorMessage ?? '동기화 실패'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
-          Text(
-            value,
-            style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
+        );
+      }
+    }
+  }
+
+  Future<void> _showDeleteLocalDataDialog() async {
+    final confirmed = await ConfirmBottomSheet.show(
+      context,
+      message: '모든 약물 데이터를 삭제할까요?\n\n이 작업은 되돌릴 수 없습니다.',
+      confirmText: '삭제',
+      cancelText: '취소',
+    );
+
+    if (confirmed && mounted) {
+      await _deleteLocalData();
+    }
+  }
+
+  Future<void> _deleteLocalData() async {
+    try {
+      await MedicationStorageService.clearAllMedications();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('데이터가 초기화되었습니다'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('삭제 실패: $e'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showDeleteAllDataDialog() async {
+    final confirmed = await ConfirmBottomSheet.show(
+      context,
+      message: '로컬과 클라우드의 모든 데이터를 삭제할까요?\n\n이 작업은 되돌릴 수 없습니다.',
+      confirmText: '전체 삭제',
+      cancelText: '취소',
+    );
+
+    if (confirmed && mounted) {
+      await _deleteAllData();
+    }
+  }
+
+  Future<void> _deleteAllData() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('삭제 중...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      await MedicationStorageService.clearAllMedications();
+      await _deleteCloudData();
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('모든 데이터가 초기화되었습니다'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('삭제 실패: $e'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteCloudData() async {
+    final userId = SupabaseService.currentUser?.id;
+    if (userId == null) return;
+
+    final client = SupabaseService.client;
+    await client.from('user_medications').delete().eq('user_id', userId);
+    await client.from('medication_logs').delete().eq('user_id', userId);
+    await client.from('injection_sites').delete().eq('user_id', userId);
+  }
+
+  Future<void> _showLogoutConfirmDialog() async {
+    final confirmed = await ConfirmBottomSheet.show(
+      context,
+      message: '정말 로그아웃 할까요?',
+      confirmText: '로그아웃',
+      cancelText: '취소',
+    );
+
+    if (confirmed && mounted) {
+      await _logout();
+    }
+  }
+
+  Future<void> _logout() async {
+    try {
+      await SupabaseService.signOut();
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const AuthScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('로그아웃에 실패했습니다'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+  }
+
+  /// 잠금화면 알림 설정 안내 다이얼로그
+  void _showLockScreenPermissionGuide() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.lock_open, color: AppColors.primaryPurple),
+            SizedBox(width: 8),
+            Text('잠금화면 알림 설정'),
+          ],
+        ),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '약물 알림이 잠금화면에 표시되도록 하려면 아래 설정을 확인해주세요.',
+                style: TextStyle(fontSize: 14),
+              ),
+              SizedBox(height: 16),
+              Text(
+                '📱 알림 설정',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              SizedBox(height: 8),
+              Text(
+                '1. 설정 > 앱 > 기다림메이트 > 알림\n'
+                '2. "잠금 화면에 표시" 활성화\n'
+                '3. "전체 화면 알림" 허용',
+                style: TextStyle(fontSize: 13, height: 1.5),
+              ),
+              SizedBox(height: 16),
+              Text(
+                '🔋 배터리 최적화',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              SizedBox(height: 8),
+              Text(
+                '1. 설정 > 앱 > 기다림메이트 > 배터리\n'
+                '2. "제한 없음" 또는 "최적화 안함" 선택',
+                style: TextStyle(fontSize: 13, height: 1.5),
+              ),
+              SizedBox(height: 16),
+              Text(
+                '⚠️ 제조사별 추가 설정이 필요할 수 있어요.\n'
+                '(삼성: 절전 제외, 샤오미: 자동 시작 등)',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('닫기', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await openAppSettings();
+            },
+            child: const Text('설정 열기', style: TextStyle(color: AppColors.primaryPurple)),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showMedicationList() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
-        decoration: const BoxDecoration(
-          color: AppColors.cardBackground,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              margin: const EdgeInsets.only(top: AppSpacing.s),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.m),
-              child: Text('등록된 약물', style: AppTextStyles.h3),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(AppSpacing.m),
-                children: [
-                  _buildMedicationItem('FSH 주사', '225IU', '매일 아침 8:00', true),
-                  _buildMedicationItem('메트포르민', '500mg', '매일 저녁 8:00', false),
-                  _buildMedicationItem('아스피린', '100mg', '매일 아침 7:00', false),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMedicationItem(String name, String dosage, String time, bool isInjection) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.s),
-      padding: const EdgeInsets.all(AppSpacing.m),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: isInjection
-                  ? AppColors.primaryPurpleLight
-                  : AppColors.success.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              isInjection ? Icons.vaccines : Icons.medication,
-              color: isInjection ? AppColors.primaryPurple : Colors.green[700],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.m),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, style: AppTextStyles.bodyLarge),
-                Text('$dosage | $time', style: AppTextStyles.caption),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            color: AppColors.textSecondary,
-            onPressed: () {},
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddMedicationOptions() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(AppSpacing.m),
-        decoration: const BoxDecoration(
-          color: AppColors.cardBackground,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              margin: const EdgeInsets.only(bottom: AppSpacing.m),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Text('약물 일정을 어떻게 추가할까요?', style: AppTextStyles.h3),
-            const SizedBox(height: AppSpacing.l),
-            _buildAddOption(
-              icon: Icons.camera_alt_outlined,
-              title: '처방전 사진 찍기',
-              subtitle: '가장 빠른 방법',
-              onTap: () => Navigator.pop(context),
-            ),
-            _buildAddOption(
-              icon: Icons.mic_outlined,
-              title: '음성으로 말하기',
-              subtitle: '"매일 아침 8시 주사"',
-              onTap: () => Navigator.pop(context),
-            ),
-            _buildAddOption(
-              icon: Icons.text_fields,
-              title: '텍스트로 입력',
-              subtitle: '복붙도 가능',
-              onTap: () => Navigator.pop(context),
-            ),
-            _buildAddOption(
-              icon: Icons.add,
-              title: '직접 하나씩 입력',
-              subtitle: '세부 조정용',
-              onTap: () => Navigator.pop(context),
-            ),
-            const SizedBox(height: AppSpacing.m),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAddOption({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.m),
-        margin: const EdgeInsets.only(bottom: AppSpacing.s),
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppColors.primaryPurpleLight,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: AppColors.primaryPurple),
-            ),
-            const SizedBox(width: AppSpacing.m),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: AppTextStyles.bodyLarge),
-                  Text(subtitle, style: AppTextStyles.caption),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showInjectionHistory() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
-        decoration: const BoxDecoration(
-          color: AppColors.cardBackground,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              margin: const EdgeInsets.only(top: AppSpacing.s),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.m),
-              child: Text('주사 부위 기록', style: AppTextStyles.h3),
-            ),
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // 배 그림 (9구역)
-                    Container(
-                      width: 200,
-                      height: 200,
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(100),
-                        border: Border.all(color: AppColors.border, width: 2),
-                      ),
-                      child: GridView.count(
-                        crossAxisCount: 3,
-                        shrinkWrap: true,
-                        padding: const EdgeInsets.all(20),
-                        children: List.generate(9, (index) {
-                          final hasInjection = [0, 2, 4, 6].contains(index);
-                          return Center(
-                            child: Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: hasInjection
-                                    ? AppColors.primaryPurple.withOpacity(0.5)
-                                    : Colors.transparent,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: AppColors.border,
-                                  width: 1,
-                                ),
-                              ),
-                              child: hasInjection
-                                  ? const Icon(
-                                      Icons.circle,
-                                      size: 12,
-                                      color: AppColors.primaryPurple,
-                                    )
-                                  : null,
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.l),
-                    Text(
-                      '최근 주사 위치가 표시됩니다',
-                      style: AppTextStyles.caption,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showStageSelector() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(AppSpacing.m),
-        decoration: const BoxDecoration(
-          color: AppColors.cardBackground,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              margin: const EdgeInsets.only(bottom: AppSpacing.m),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Text('치료 단계 선택', style: AppTextStyles.h3),
-            const SizedBox(height: AppSpacing.m),
-            _buildStageOption('채취 전 (Stimulation)', true),
-            _buildStageOption('채취 (Retrieval)', false),
-            _buildStageOption('수정 (Fertilization)', false),
-            _buildStageOption('배양 (Culture)', false),
-            _buildStageOption('이식 전 (Before Transfer)', false),
-            _buildStageOption('이식 (Transfer)', false),
-            _buildStageOption('이식 후 (Post Transfer)', false),
-            const SizedBox(height: AppSpacing.m),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStageOption(String title, bool isSelected) {
-    return InkWell(
-      onTap: () => Navigator.pop(context),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.m),
-        margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primaryPurpleLight : AppColors.background,
-          borderRadius: BorderRadius.circular(12),
-          border: isSelected
-              ? Border.all(color: AppColors.primaryPurple, width: 2)
-              : null,
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                title,
-                style: AppTextStyles.body.copyWith(
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                  color: isSelected ? AppColors.primaryPurple : AppColors.textPrimary,
-                ),
-              ),
-            ),
-            if (isSelected)
-              const Icon(Icons.check_circle, color: AppColors.primaryPurple),
-          ],
-        ),
       ),
     );
   }

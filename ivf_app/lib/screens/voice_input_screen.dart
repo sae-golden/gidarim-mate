@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:file_picker/file_picker.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
 import '../constants/app_spacing.dart';
@@ -89,7 +88,7 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('음성 인식 오류: ${error.errorMsg}'),
-              backgroundColor: AppColors.error,
+              backgroundColor: AppColors.success,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -106,7 +105,7 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('음성 인식을 사용할 수 없습니다. 마이크 권한을 확인해주세요.'),
-            backgroundColor: AppColors.error,
+            backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -214,6 +213,81 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
         debugPrint('🔄 약 이름 보정: ${match.matchedAlias} → ${match.medication.name} (${match.confidencePercent})');
       }
     }
+
+    // 같은 약 이름 + 같은 종류는 시간대를 합쳐서 하나로 만듦
+    final mergedMedications = _mergeSameMedications(result.medications);
+
+    return VoiceRecognitionResult(
+      rawText: result.rawText,
+      medications: mergedMedications,
+      confidence: result.confidence,
+    );
+  }
+
+  /// 같은 약물 이름과 종류를 가진 항목들을 하나로 합침 (시간대 병합)
+  List<ParsedMedication> _mergeSameMedications(List<ParsedMedication> medications) {
+    // 약 이름(소문자) + 종류를 키로 그룹화
+    final grouped = <String, List<ParsedMedication>>{};
+
+    for (final med in medications) {
+      final key = '${med.name.toLowerCase()}_${med.type.name}';
+      grouped.putIfAbsent(key, () => []).add(med);
+    }
+
+    final result = <ParsedMedication>[];
+
+    for (final group in grouped.values) {
+      if (group.length == 1) {
+        // 단일 항목은 그대로
+        result.add(group.first);
+      } else {
+        // 여러 항목 병합
+        final first = group.first;
+
+        // 모든 시간 텍스트 수집
+        final allTimeTimes = <String>[];
+        for (final med in group) {
+          if (med.timeText != null && med.timeText!.isNotEmpty) {
+            allTimeTimes.add(med.timeText!);
+          } else if (med.time != null) {
+            allTimeTimes.add(med.displayTime);
+          }
+        }
+
+        // 중복 제거 후 합침
+        final uniqueTimes = allTimeTimes.toSet().toList();
+        final mergedTimeText = uniqueTimes.join(', ');
+
+        // 총 수량 합산
+        final totalQuantity = group.fold<int>(0, (sum, med) => sum + med.quantity);
+
+        // 날짜는 가장 넓은 범위로
+        DateTime? earliestStart;
+        DateTime? latestEnd;
+        for (final med in group) {
+          if (earliestStart == null || med.startDate.isBefore(earliestStart)) {
+            earliestStart = med.startDate;
+          }
+          if (latestEnd == null || med.endDate.isAfter(latestEnd)) {
+            latestEnd = med.endDate;
+          }
+        }
+
+        result.add(ParsedMedication(
+          name: first.name,
+          type: first.type,
+          quantity: totalQuantity,
+          timeText: mergedTimeText,
+          time: first.time,
+          startDate: earliestStart,
+          endDate: latestEnd,
+          isSelected: first.isSelected,
+        ));
+
+        debugPrint('🔗 약물 병합: ${first.name} x${group.length} → 시간: $mergedTimeText');
+      }
+    }
+
     return result;
   }
 
@@ -292,7 +366,7 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('저장 실패: $e'),
-            backgroundColor: AppColors.error,
+            backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -371,34 +445,6 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
     }
   }
 
-  Future<void> _pickAudioFile() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['mp3', 'm4a', 'wav', 'aac'],
-      );
-
-      if (result != null && result.files.isNotEmpty) {
-        // TODO: 오디오 파일 처리 (STT API 연동 필요)
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('파일 선택됨: ${result.files.first.name}\n(추후 지원 예정)'),
-            backgroundColor: AppColors.info,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('파일 선택 중 오류가 발생했습니다'),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -474,11 +520,6 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
 
           // 가이드
           _buildGuide(),
-
-          const SizedBox(height: AppSpacing.xl),
-
-          // 녹음파일 업로드
-          _buildFileUploadButton(),
         ],
       ),
     );
@@ -676,30 +717,6 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
     );
   }
 
-  Widget _buildFileUploadButton() {
-    return GestureDetector(
-      onTap: _pickAudioFile,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.folder_open,
-            size: 18,
-            color: AppColors.textSecondary,
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Text(
-            '녹음파일로 입력하기',
-            style: AppTextStyles.caption.copyWith(
-              color: AppColors.textSecondary,
-              decoration: TextDecoration.underline,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   /// 인식 결과 화면
   Widget _buildResultView() {
     final selectedCount =
@@ -866,6 +883,7 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
                     style: AppTextStyles.bodyLarge.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -873,6 +891,7 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
                     style: AppTextStyles.caption.copyWith(
                       color: AppColors.textSecondary,
                     ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                   // 복용 기간 표시
                   Text(
@@ -881,6 +900,7 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
                       color: AppColors.textSecondary,
                       fontSize: 11,
                     ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -891,11 +911,29 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
               icon: const Icon(Icons.edit_outlined, size: 20),
               color: AppColors.textSecondary,
               onPressed: () => _showEditScreen(index, med),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            ),
+
+            // 삭제 버튼
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 20),
+              color: AppColors.error,
+              onPressed: () => _deleteMedication(index),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// 약물 삭제
+  void _deleteMedication(int index) {
+    setState(() {
+      _result!.medications.removeAt(index);
+    });
   }
 
   void _showEditScreen(int index, ParsedMedication med) async {
@@ -922,7 +960,7 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
       case MedicationType.suppository:
         return '질정';
       case MedicationType.patch:
-        return '패치';
+        return '한약';
     }
   }
 }
@@ -1850,7 +1888,7 @@ class _MedicationEditScreenState extends State<_MedicationEditScreen> {
       case MedicationType.suppository:
         return '질정';
       case MedicationType.patch:
-        return '패치';
+        return '한약';
     }
   }
 

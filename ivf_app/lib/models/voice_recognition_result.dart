@@ -64,7 +64,7 @@ class ParsedMedication {
       case MedicationType.suppository:
         return '질정';
       case MedicationType.patch:
-        return '패치';
+        return '한약';
     }
   }
 
@@ -78,7 +78,7 @@ class ParsedMedication {
       case MedicationType.suppository:
         return '💊';
       case MedicationType.patch:
-        return '🩹';
+        return '🍵';
     }
   }
 }
@@ -88,7 +88,7 @@ enum MedicationType {
   oral, // 알약/경구
   injection, // 주사
   suppository, // 질정
-  patch, // 패치
+  patch, // 한약 (기존 patch 유지 - DB 호환성)
 }
 
 /// 음성 텍스트 파서
@@ -110,7 +110,7 @@ class VoiceTextParser {
     // IVF 질정
     '루테늄', '크리논', '프로게스테론',
     // 일반 표현
-    '주사', '알약', '질정', '패치',
+    '주사', '알약', '질정', '한약',
   ];
 
   // 시간 키워드 매핑
@@ -135,7 +135,7 @@ class VoiceTextParser {
     '주사': MedicationType.injection,
     '질정': MedicationType.suppository,
     '좌약': MedicationType.suppository,
-    '패치': MedicationType.patch,
+    '한약': MedicationType.patch,
   };
 
   /// 음성 텍스트를 파싱하여 여러 약물 정보 추출

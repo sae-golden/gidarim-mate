@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>IVF 치료 기록</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #9B7ED9;
+      --primary-light: #E8E0F4;
+      --primary-dark: #7B5FC0;
+      --success: #4ECDC4;
+      --success-light: #E0F7F5;
+      --warning: #FFB347;
+      --gray-100: #F8F7FC;
+      --gray-200: #EEEDF3;
+      --gray-300: #D1D0D8;
+      --gray-400: #9E9DA5;
+      --gray-600: #5C5B63;
+      --gray-800: #2D2C33;
+      --white: #FFFFFF;
+      --shadow-sm: 0 2px 8px rgba(155, 126, 217, 0.08);
+      --shadow-md: 0 4px 16px rgba(155, 126, 217, 0.12);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Noto Sans KR', -apple-system, sans-serif;
+      background: var(--gray-100);
+      color: var(--gray-800);
+      min-height: 100vh;
+      padding-bottom: 80px;
+    }
+
+    /* Header */
+    .header {
+      background: var(--white);
+      padding: 16px 20px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 17px;
+      border-bottom: 1px solid var(--gray-200);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    /* Tab Navigation */
+    .tab-nav {
+      display: flex;
+      background: var(--white);
+      padding: 0 20px;
+      border-bottom: 1px solid var(--gray-200);
+    }
+
+    .tab-item {
+      flex: 1;
+      text-align: center;
+      padding: 14px 0;
+      font-size: 14px;
+      color: var(--gray-400);
+      cursor: pointer;
+      position: relative;
+      transition: color 0.2s;
+    }
+
+    .tab-item.active {
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .tab-item.active::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 20%;
+      right: 20%;
+      height: 2px;
+      background: var(--primary);
+      border-radius: 2px;
+    }
+
+    /* Summary Card */
+    .summary-card {
+      margin: 16px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      border-radius: 20px;
+      padding: 20px;
+      color: var(--white);
+      box-shadow: var(--shadow-md);
+    }
+
+    .summary-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .cycle-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .cycle-badge span {
+      background: rgba(255,255,255,0.2);
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 13px;
+    }
+
+    .edit-btn {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .summary-stats {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .stat-box {
+      flex: 1;
+      background: rgba(255,255,255,0.15);
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      opacity: 0.8;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .stat-value small {
+      font-size: 14px;
+      font-weight: 400;
+    }
+
+    /* Pipeline */
+    .pipeline {
+      background: rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .pipeline-title {
+      font-size: 12px;
+      opacity: 0.8;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pipeline-flow {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+
+    .pipeline-item {
+      text-align: center;
+    }
+
+    .pipeline-num {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .pipeline-label {
+      font-size: 11px;
+      opacity: 0.7;
+    }
+
+    .pipeline-arrow {
+      font-size: 16px;
+      opacity: 0.5;
+    }
+
+    /* Stage List */
+    .stage-section {
+      padding: 0 16px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--gray-600);
+      margin: 20px 0 12px;
+    }
+
+    /* Stage Card */
+    .stage-card {
+      background: var(--white);
+      border-radius: 16px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+
+    .stage-card.active {
+      box-shadow: 0 0 0 2px var(--primary), var(--shadow-md);
+    }
+
+    .stage-header {
+      display: flex;
+      align-items: center;
+      padding: 16px;
+      gap: 12px;
+      cursor: pointer;
+    }
+
+    .stage-indicator {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .stage-indicator.completed {
+      background: var(--success);
+      color: white;
+    }
+
+    .stage-indicator.current {
+      background: var(--primary);
+      color: white;
+      animation: pulse 2s infinite;
+    }
+
+    .stage-indicator.pending {
+      background: var(--gray-200);
+      color: var(--gray-400);
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(155, 126, 217, 0.4); }
+      50% { box-shadow: 0 0 0 8px rgba(155, 126, 217, 0); }
+    }
+
+    .stage-info {
+      flex: 1;
+    }
+
+    .stage-name {
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--gray-800);
+      margin-bottom: 2px;
+    }
+
+    .stage-date {
+      font-size: 13px;
+      color: var(--gray-400);
+    }
+
+    .stage-date.current {
+      color: var(--primary);
+    }
+
+    .stage-badge {
+      background: var(--primary-light);
+      color: var(--primary);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 10px;
+    }
+
+    .stage-toggle {
+      color: var(--gray-300);
+      font-size: 20px;
+      transition: transform 0.2s;
+    }
+
+    .stage-card.expanded .stage-toggle {
+      transform: rotate(180deg);
+    }
+
+    /* Stage Content */
+    .stage-content {
+      display: none;
+      padding: 0 16px 16px;
+      border-top: 1px solid var(--gray-200);
+      margin-top: 0;
+    }
+
+    .stage-card.expanded .stage-content {
+      display: block;
+    }
+
+    /* Result Items */
+    .result-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .result-item {
+      background: var(--gray-100);
+      border-radius: 12px;
+      padding: 14px;
+      text-align: center;
+    }
+
+    .result-item.full {
+      grid-column: 1 / -1;
+    }
+
+    .result-icon {
+      font-size: 20px;
+      margin-bottom: 6px;
+    }
+
+    .result-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--gray-800);
+    }
+
+    .result-value span {
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--gray-400);
+    }
+
+    .result-label {
+      font-size: 12px;
+      color: var(--gray-400);
+      margin-top: 2px;
+    }
+
+    /* Add Result Button */
+    .add-result-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 14px;
+      margin-top: 14px;
+      background: var(--primary-light);
+      border: 2px dashed var(--primary);
+      border-radius: 12px;
+      color: var(--primary);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .add-result-btn:hover {
+      background: var(--primary);
+      color: white;
+      border-style: solid;
+    }
+
+    /* Waiting Results Section */
+    .waiting-results {
+      margin-top: 14px;
+    }
+
+    .waiting-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gray-600);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 14px;
+      background: var(--gray-100);
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+
+    .result-row-label {
+      font-size: 14px;
+      color: var(--gray-600);
+    }
+
+    .result-row-value {
+      font-weight: 600;
+      color: var(--gray-800);
+    }
+
+    .result-row-value.highlight {
+      color: var(--primary);
+    }
+
+    /* Memo */
+    .memo-box {
+      background: #FFF9E6;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-top: 10px;
+      font-size: 13px;
+      color: #8B7355;
+    }
+
+    .memo-box::before {
+      content: '📝 ';
+    }
+
+    /* Bottom Navigation */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--white);
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 0 20px;
+      border-top: 1px solid var(--gray-200);
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      color: var(--gray-400);
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .nav-item.active {
+      color: var(--primary);
+    }
+
+    .nav-icon {
+      font-size: 22px;
+    }
+
+    /* Timeline connector */
+    .timeline-container {
+      position: relative;
+    }
+
+    .timeline-line {
+      position: absolute;
+      left: 34px;
+      top: 52px;
+      bottom: 0;
+      width: 2px;
+      background: var(--gray-200);
+    }
+
+    .stage-card:last-child .timeline-line {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">치료 기록</div>
+  
+  <div class="tab-nav">
+    <div class="tab-item active">단계별 기록</div>
+    <div class="tab-item">통계</div>
+  </div>
+
+  <!-- Summary Card -->
+  <div class="summary-card">
+    <div class="summary-header">
+      <div class="cycle-badge">
+        🔄 <span>1차 시도</span>
+      </div>
+      <button class="edit-btn">편집</button>
+    </div>
+    
+    <div class="summary-stats">
+      <div class="stat-box">
+        <div class="stat-label">완료</div>
+        <div class="stat-value">42<small>회</small></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">남은 횟수</div>
+        <div class="stat-value">23<small>회</small></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">D-Day</div>
+        <div class="stat-value">5<small>일</small></div>
+      </div>
+    </div>
+
+    <div class="pipeline">
+      <div class="pipeline-title">📊 결과 요약</div>
+      <div class="pipeline-flow">
+        <div class="pipeline-item">
+          <div class="pipeline-num">12</div>
+          <div class="pipeline-label">채취</div>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-item">
+          <div class="pipeline-num">8</div>
+          <div class="pipeline-label">수정</div>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-item">
+          <div class="pipeline-num">5</div>
+          <div class="pipeline-label">Day3</div>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-item">
+          <div class="pipeline-num">3</div>
+          <div class="pipeline-label">배반포</div>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-item">
+          <div class="pipeline-num">2</div>
+          <div class="pipeline-label">동결</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stage List -->
+  <div class="stage-section">
+    <div class="section-title">📋 치료 단계</div>
+
+    <!-- Stage 1: 과배란 -->
+    <div class="stage-card expanded">
+      <div class="stage-header" onclick="toggleStage(this)">
+        <div class="stage-indicator completed">✓</div>
+        <div class="stage-info">
+          <div class="stage-name">과배란 (Stimulation)</div>
+          <div class="stage-date">2025.01.01 ~ 01.10</div>
+        </div>
+        <div class="stage-toggle">⌄</div>
+      </div>
+      <div class="stage-content">
+        <div class="result-grid">
+          <div class="result-item">
+            <div class="result-icon">💉</div>
+            <div class="result-value">42<span>회</span></div>
+            <div class="result-label">주사 횟수</div>
+          </div>
+          <div class="result-item">
+            <div class="result-icon">📅</div>
+            <div class="result-value">10<span>일</span></div>
+            <div class="result-label">기간</div>
+          </div>
+        </div>
+        <div class="memo-box">왼쪽 배 쪽이 덜 아픔. 오른쪽은 멍 조심</div>
+      </div>
+    </div>
+
+    <!-- Stage 2: 채취 -->
+    <div class="stage-card expanded active">
+      <div class="stage-header" onclick="toggleStage(this)">
+        <div class="stage-indicator completed">✓</div>
+        <div class="stage-info">
+          <div class="stage-name">채취 (Retrieval)</div>
+          <div class="stage-date">2025.01.11</div>
+        </div>
+        <div class="stage-toggle">⌄</div>
+      </div>
+      <div class="stage-content">
+        <div class="result-grid">
+          <div class="result-item">
+            <div class="result-icon">🥚</div>
+            <div class="result-value">12<span>개</span></div>
+            <div class="result-label">채취 난자</div>
+          </div>
+          <div class="result-item">
+            <div class="result-icon">🧫</div>
+            <div class="result-value">10<span>개</span></div>
+            <div class="result-label">성숙란 (M2)</div>
+          </div>
+        </div>
+        <div class="memo-box">왼쪽 6개, 오른쪽 6개. 회복 잘 됨</div>
+      </div>
+    </div>
+
+    <!-- Stage 3: 이식 대기 -->
+    <div class="stage-card expanded">
+      <div class="stage-header" onclick="toggleStage(this)">
+        <div class="stage-indicator current">▶</div>
+        <div class="stage-info">
+          <div class="stage-name">이식 대기</div>
+          <div class="stage-date current">2025.01.12 ~ 진행 중</div>
+        </div>
+        <span class="stage-badge">현재</span>
+        <div class="stage-toggle">⌄</div>
+      </div>
+      <div class="stage-content">
+        <div class="waiting-results">
+          <div class="waiting-title">📞 병원 결과</div>
+          
+          <div class="result-row">
+            <span class="result-row-label">수정 결과</span>
+            <span class="result-row-value">8개 수정 (ICSI)</span>
+          </div>
+          
+          <div class="result-row">
+            <span class="result-row-label">Day 3 배아</span>
+            <span class="result-row-value">5개</span>
+          </div>
+          
+          <div class="result-row">
+            <span class="result-row-label">Day 5 배반포</span>
+            <span class="result-row-value highlight">3개 (AA 1, AB 2)</span>
+          </div>
+          
+          <div class="result-row">
+            <span class="result-row-label">동결</span>
+            <span class="result-row-value">2개</span>
+          </div>
+        </div>
+        
+        <button class="add-result-btn">
+          <span>+</span> 결과 추가하기
+        </button>
+        
+        <div class="memo-box">1/16 이식 예정. AA등급 1개 신선이식 예정</div>
+      </div>
+    </div>
+
+    <!-- Stage 4: 이식 -->
+    <div class="stage-card">
+      <div class="stage-header" onclick="toggleStage(this)">
+        <div class="stage-indicator pending">4</div>
+        <div class="stage-info">
+          <div class="stage-name">이식 (Transfer)</div>
+          <div class="stage-date">2025.01.16 예정</div>
+        </div>
+        <div class="stage-toggle">⌄</div>
+      </div>
+      <div class="stage-content">
+        <div class="result-grid">
+          <div class="result-item">
+            <div class="result-icon">🎯</div>
+            <div class="result-value">-<span>개</span></div>
+            <div class="result-label">이식 배아</div>
+          </div>
+          <div class="result-item">
+            <div class="result-icon">📏</div>
+            <div class="result-value">-<span>mm</span></div>
+            <div class="result-label">내막 두께</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stage 5: 판정 -->
+    <div class="stage-card">
+      <div class="stage-header" onclick="toggleStage(this)">
+        <div class="stage-indicator pending">5</div>
+        <div class="stage-info">
+          <div class="stage-name">판정 (Result)</div>
+          <div class="stage-date">예정</div>
+        </div>
+        <div class="stage-toggle">⌄</div>
+      </div>
+      <div class="stage-content">
+        <div class="result-grid">
+          <div class="result-item">
+            <div class="result-icon">🩸</div>
+            <div class="result-value">-</div>
+            <div class="result-label">hCG 수치</div>
+          </div>
+          <div class="result-item">
+            <div class="result-icon">🤰</div>
+            <div class="result-value">-</div>
+            <div class="result-label">임신 여부</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation -->
+  <div class="bottom-nav">
+    <div class="nav-item">
+      <span class="nav-icon">🏠</span>
+      <span>홈</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">📅</span>
+      <span>캘린더</span>
+    </div>
+    <div class="nav-item active">
+      <span class="nav-icon">📊</span>
+      <span>치료기록</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">⚙️</span>
+      <span>설정</span>
+    </div>
+  </div>
+
+  <script>
+    function toggleStage(header) {
+      const card = header.parentElement;
+      card.classList.toggle('expanded');
+    }
+  </script>
+</body>
+</html>

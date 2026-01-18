@@ -659,7 +659,7 @@ enum MedicationFormType {
   injection, // 주사
   oral,      // 경구약 (알약)
   vaginal,   // 질정
-  patch,     // 패치
+  patch,     // 한약 (기존 patch 유지 - DB 호환성)
 }
 
 extension MedicationFormTypeExtension on MedicationFormType {
@@ -672,7 +672,7 @@ extension MedicationFormTypeExtension on MedicationFormType {
       case MedicationFormType.vaginal:
         return '질정';
       case MedicationFormType.patch:
-        return '패치';
+        return '한약';
     }
   }
 
@@ -685,7 +685,7 @@ extension MedicationFormTypeExtension on MedicationFormType {
       case MedicationFormType.vaginal:
         return '개';
       case MedicationFormType.patch:
-        return '장';
+        return '팩';
     }
   }
 
@@ -698,7 +698,7 @@ extension MedicationFormTypeExtension on MedicationFormType {
       case MedicationFormType.vaginal:
         return '🔵';
       case MedicationFormType.patch:
-        return '🩹';
+        return '🍵';
     }
   }
 }

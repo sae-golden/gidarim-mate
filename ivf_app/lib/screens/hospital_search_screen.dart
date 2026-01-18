@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
 import '../constants/app_spacing.dart';
-import '../widgets/app_card.dart';
 import '../models/hospital.dart';
 import '../services/hospital_service.dart';
 

@@ -6,6 +6,7 @@ class NotificationSettings {
   final bool alarmStyle; // 알람 스타일 (끌 때까지 울림)
   final bool repeatIfNotCompleted; // 미완료 시 재알림
   final int repeatIntervalMinutes; // 재알림 간격 (분)
+  final double alarmVolume; // 알람 음량 (0.0 ~ 1.0)
 
   const NotificationSettings({
     this.isEnabled = true,
@@ -13,7 +14,8 @@ class NotificationSettings {
     this.preNotificationMinutes = 10,
     this.alarmStyle = true,
     this.repeatIfNotCompleted = true,
-    this.repeatIntervalMinutes = 10,
+    this.repeatIntervalMinutes = 5, // 기본값 5분으로 변경
+    this.alarmVolume = 0.8,
   });
 
   /// 기본 설정
@@ -32,6 +34,7 @@ class NotificationSettings {
     bool? alarmStyle,
     bool? repeatIfNotCompleted,
     int? repeatIntervalMinutes,
+    double? alarmVolume,
   }) {
     return NotificationSettings(
       isEnabled: isEnabled ?? this.isEnabled,
@@ -42,6 +45,7 @@ class NotificationSettings {
       repeatIfNotCompleted: repeatIfNotCompleted ?? this.repeatIfNotCompleted,
       repeatIntervalMinutes:
           repeatIntervalMinutes ?? this.repeatIntervalMinutes,
+      alarmVolume: alarmVolume ?? this.alarmVolume,
     );
   }
 
@@ -53,6 +57,7 @@ class NotificationSettings {
       'alarmStyle': alarmStyle,
       'repeatIfNotCompleted': repeatIfNotCompleted,
       'repeatIntervalMinutes': repeatIntervalMinutes,
+      'alarmVolume': alarmVolume,
     };
   }
 
@@ -63,7 +68,8 @@ class NotificationSettings {
       preNotificationMinutes: json['preNotificationMinutes'] as int? ?? 10,
       alarmStyle: json['alarmStyle'] as bool? ?? true,
       repeatIfNotCompleted: json['repeatIfNotCompleted'] as bool? ?? true,
-      repeatIntervalMinutes: json['repeatIntervalMinutes'] as int? ?? 10,
+      repeatIntervalMinutes: json['repeatIntervalMinutes'] as int? ?? 5,
+      alarmVolume: (json['alarmVolume'] as num?)?.toDouble() ?? 0.8,
     );
   }
 }

@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../constants/app_colors.dart';
@@ -12,6 +12,7 @@ import '../models/medication.dart';
 import '../services/medication_api_service.dart';
 import '../models/medication_info.dart';
 import '../services/ivf_medication_matcher.dart';
+import '../services/medication_storage_service.dart';
 import 'medication_detail_screen.dart';
 import 'quick_add_medication_screen.dart';
 import 'voice_input_screen.dart';
@@ -60,19 +61,18 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
 
           _buildInputMethodCard(
             icon: Icons.camera_alt_outlined,
-            title: '처방전 사진 찍기',
-            subtitle: '가장 빠른 방법',
+            title: '처방전 사진 찍기 (추후지원)',
+            subtitle: '준비 중이에요',
             color: AppColors.primaryPurple,
-            onTap: () async {
-              final result = await Navigator.push<Medication>(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const OcrInputScreen(),
+            isDisabled: true,
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('준비 중입니다'),
+                  backgroundColor: AppColors.success,
+                  behavior: SnackBarBehavior.floating,
                 ),
               );
-              if (result != null && mounted) {
-                Navigator.pop(context, result);
-              }
             },
           ),
           const SizedBox(height: AppSpacing.s),
@@ -149,62 +149,67 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     required String subtitle,
     required Color color,
     bool isRecommended = false,
+    bool isDisabled = false,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: AppCard(
-        child: Row(
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: Color.fromRGBO(color.red, color.green, color.blue, 0.15),
-                borderRadius: BorderRadius.circular(16),
+      child: Opacity(
+        opacity: isDisabled ? 0.5 : 1.0,
+        child: AppCard(
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Color.fromRGBO(color.red, color.green, color.blue, 0.15),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(icon, color: color, size: 28),
               ),
-              child: Icon(icon, color: color, size: 28),
-            ),
-            const SizedBox(width: AppSpacing.m),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(title, style: AppTextStyles.bodyLarge.copyWith(
-                        fontWeight: FontWeight.w600,
-                      )),
-                      if (isRecommended) ...[
-                        const SizedBox(width: AppSpacing.xs),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryPurple,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            '추천',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
+              const SizedBox(width: AppSpacing.m),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(title, style: AppTextStyles.bodyLarge.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: isDisabled ? AppColors.textSecondary : null,
+                        )),
+                        if (isRecommended) ...[
+                          const SizedBox(width: AppSpacing.xs),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryPurple,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              '추천',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(subtitle, style: AppTextStyles.caption),
-                ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: AppTextStyles.caption),
+                  ],
+                ),
               ),
-            ),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-          ],
+              const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+            ],
+          ),
         ),
       ),
     );
@@ -389,7 +394,7 @@ class _TextInputScreenState extends State<TextInputScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('약물 정보를 인식하지 못했습니다. 다시 입력해주세요.'),
-            backgroundColor: AppColors.error,
+            backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
@@ -559,24 +564,55 @@ class _TextInputScreenState extends State<TextInputScreen> {
     );
   }
 
-  void _saveMedications() {
+  Future<void> _saveMedications() async {
     if (_parsedMedications.isEmpty) return;
 
-    // 첫 번째 약물만 반환 (여러 개일 경우 나중에 처리)
-    final first = _parsedMedications.first;
-    final medication = Medication(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      name: first.name,
-      dosage: first.dosage,
-      time: first.time,
-      startDate: DateTime.now(),
-      endDate: DateTime.now().add(const Duration(days: 14)),
-      type: first.type,
-      pattern: first.pattern,
-      totalCount: 14,
-    );
+    // 모든 약물 저장
+    final medications = <Medication>[];
+    var idCounter = 0;
 
-    Navigator.pop(context, medication);
+    for (final med in _parsedMedications) {
+      final id = '${DateTime.now().millisecondsSinceEpoch}_$idCounter';
+      idCounter++;
+
+      medications.add(Medication(
+        id: id,
+        name: med.name,
+        dosage: med.dosage,
+        time: med.time,
+        startDate: DateTime.now(),
+        endDate: DateTime.now().add(const Duration(days: 14)),
+        type: med.type,
+        pattern: med.pattern,
+        totalCount: 14,
+      ));
+    }
+
+    // 로컬 저장소에 저장
+    try {
+      await MedicationStorageService.addMedications(medications);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${medications.length}개 약물이 추가되었습니다'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.pop(context, medications.isNotEmpty ? medications.first : null);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('저장 실패: $e'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -659,7 +695,7 @@ class _VoiceInputScreenState extends State<VoiceInputScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('음성 인식 오류: ${error.errorMsg}'),
-              backgroundColor: AppColors.error,
+              backgroundColor: AppColors.success,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -677,7 +713,7 @@ class _VoiceInputScreenState extends State<VoiceInputScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: const Text('음성 인식을 사용할 수 없습니다. 마이크 권한을 확인해주세요.'),
-              backgroundColor: AppColors.error,
+              backgroundColor: AppColors.success,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
@@ -1576,7 +1612,7 @@ class _VoiceInputScreenState extends State<VoiceInputScreen> {
     );
   }
 
-  void _saveMedication() {
+  Future<void> _saveMedication() async {
     if (_matchedMedication == null) return;
 
     final med = _matchedMedication!.medication;
@@ -1604,7 +1640,31 @@ class _VoiceInputScreenState extends State<VoiceInputScreen> {
       totalCount: 14,
     );
 
-    Navigator.pop(context, medication);
+    // 로컬 저장소에 저장
+    try {
+      await MedicationStorageService.addMedication(medication);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${medication.name}이(가) 추가되었습니다'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.pop(context, medication);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('저장 실패: $e'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -1651,7 +1711,7 @@ class _OcrInputScreenState extends State<OcrInputScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('이미지 선택 실패: $e'),
-          backgroundColor: AppColors.error,
+          backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -1727,7 +1787,7 @@ class _OcrInputScreenState extends State<OcrInputScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('텍스트 인식 실패: $e'),
-          backgroundColor: AppColors.error,
+          backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -2116,23 +2176,55 @@ class _OcrInputScreenState extends State<OcrInputScreen> {
     );
   }
 
-  void _saveMedications() {
+  Future<void> _saveMedications() async {
     if (_parsedMedications.isEmpty) return;
 
-    final first = _parsedMedications.first;
-    final medication = Medication(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      name: first.name,
-      dosage: first.dosage,
-      time: first.time,
-      startDate: DateTime.now(),
-      endDate: DateTime.now().add(const Duration(days: 14)),
-      type: first.type,
-      pattern: first.pattern,
-      totalCount: 14,
-    );
+    // 모든 약물 저장
+    final medications = <Medication>[];
+    var idCounter = 0;
 
-    Navigator.pop(context, medication);
+    for (final med in _parsedMedications) {
+      final id = '${DateTime.now().millisecondsSinceEpoch}_$idCounter';
+      idCounter++;
+
+      medications.add(Medication(
+        id: id,
+        name: med.name,
+        dosage: med.dosage,
+        time: med.time,
+        startDate: DateTime.now(),
+        endDate: DateTime.now().add(const Duration(days: 14)),
+        type: med.type,
+        pattern: med.pattern,
+        totalCount: 14,
+      ));
+    }
+
+    // 로컬 저장소에 저장
+    try {
+      await MedicationStorageService.addMedications(medications);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${medications.length}개 약물이 추가되었습니다'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.pop(context, medications.isNotEmpty ? medications.first : null);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('저장 실패: $e'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -3162,7 +3254,7 @@ class _ManualMedicationInputScreenState
     return duration;
   }
 
-  void _saveMedication() {
+  void _saveMedication() async {
     final duration = _endDate.difference(_startDate).inDays + 1;
     final totalCount = _calculateTotalCount(duration);
 
@@ -3183,6 +3275,38 @@ class _ManualMedicationInputScreenState
       totalCount: totalCount,
     );
 
-    Navigator.pop(context, medication);
+    try {
+      debugPrint('💾 약물 저장 시도: ${medication.name}');
+      debugPrint('  - 시작일: ${medication.startDate.toIso8601String()}');
+      debugPrint('  - 종료일: ${medication.endDate.toIso8601String()}');
+      await MedicationStorageService.addMedication(medication);
+      debugPrint('✅ 약물 저장 완료: ${medication.name}');
+
+      // 저장 확인
+      final savedMeds = await MedicationStorageService.getAllMedications();
+      debugPrint('📦 저장 후 총 약물 수: ${savedMeds.length}');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${medication.name} 약물이 추가되었습니다'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.pop(context, medication);
+      }
+    } catch (e) {
+      debugPrint('❌ 약물 저장 실패: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('저장 실패: $e'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 }

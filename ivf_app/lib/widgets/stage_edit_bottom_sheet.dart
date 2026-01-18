@@ -41,7 +41,9 @@ class StageEditBottomSheet extends StatefulWidget {
 class _StageEditBottomSheetState extends State<StageEditBottomSheet> {
   late DateTime? _selectedDate;
   late int? _count;
-  late ResultType? _result;
+  late int? _cultureDay;
+  late String? _memo;
+  late TextEditingController _memoController;
 
   @override
   void initState() {
@@ -51,7 +53,15 @@ class _StageEditBottomSheetState extends State<StageEditBottomSheet> {
         ? widget.stage.startDate
         : widget.stage.date;
     _count = widget.stage.count;
-    _result = widget.stage.result;
+    _cultureDay = widget.stage.cultureDay;
+    _memo = widget.stage.memo;
+    _memoController = TextEditingController(text: _memo ?? '');
+  }
+
+  @override
+  void dispose() {
+    _memoController.dispose();
+    super.dispose();
   }
 
   @override
@@ -107,11 +117,15 @@ class _StageEditBottomSheetState extends State<StageEditBottomSheet> {
             const SizedBox(height: AppSpacing.m),
           ],
 
-          // 결과 선택 (판정만)
-          if (widget.stage.type == SimpleStageType.result) ...[
-            _buildResultSelector(),
+          // 배양일수 입력 (이식, 동결만)
+          if (widget.stage.type.hasCultureDayInput) ...[
+            _buildCultureDaySelector(),
             const SizedBox(height: AppSpacing.m),
           ],
+
+          // 메모 입력
+          _buildMemoInput(),
+          const SizedBox(height: AppSpacing.m),
 
           const SizedBox(height: AppSpacing.m),
 
@@ -258,13 +272,13 @@ class _StageEditBottomSheetState extends State<StageEditBottomSheet> {
     );
   }
 
-  /// 결과 선택 위젯 (판정)
-  Widget _buildResultSelector() {
+  /// 배양일수 선택 위젯
+  Widget _buildCultureDaySelector() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '🎉 결과 (선택)',
+          '🧫 배양일수 (선택)',
           style: AppTextStyles.body.copyWith(
             fontWeight: FontWeight.w600,
             color: AppColors.textSecondary,
@@ -272,18 +286,18 @@ class _StageEditBottomSheetState extends State<StageEditBottomSheet> {
         ),
         const SizedBox(height: AppSpacing.s),
         Row(
-          children: ResultType.values.map((type) {
-            final isSelected = _result == type;
+          children: [3, 5, 6].map((day) {
+            final isSelected = _cultureDay == day;
             return Expanded(
               child: GestureDetector(
                 onTap: () {
                   setState(() {
-                    _result = isSelected ? null : type;
+                    _cultureDay = isSelected ? null : day;
                   });
                 },
                 child: Container(
                   margin: EdgeInsets.only(
-                    right: type != ResultType.unknown ? AppSpacing.s : 0,
+                    right: day != 6 ? AppSpacing.s : 0,
                   ),
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.m),
                   decoration: BoxDecoration(
@@ -296,42 +310,61 @@ class _StageEditBottomSheetState extends State<StageEditBottomSheet> {
                           isSelected ? AppColors.primaryPurple : AppColors.border,
                     ),
                   ),
-                  child: Column(
-                    children: [
-                      Text(
-                        type.label,
-                        style: AppTextStyles.body.copyWith(
-                          color: isSelected ? Colors.white : AppColors.textPrimary,
-                          fontWeight: FontWeight.w600,
-                        ),
+                  child: Center(
+                    child: Text(
+                      'D$day',
+                      style: AppTextStyles.body.copyWith(
+                        color: isSelected ? Colors.white : AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
                       ),
-                      const SizedBox(height: 4),
-                      Container(
-                        width: 20,
-                        height: 20,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isSelected
-                              ? Colors.white
-                              : AppColors.background,
-                          border: Border.all(
-                            color: isSelected
-                                ? Colors.white
-                                : AppColors.textDisabled,
-                            width: 2,
-                          ),
-                        ),
-                        child: isSelected
-                            ? const Icon(Icons.check,
-                                size: 14, color: AppColors.primaryPurple)
-                            : null,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
             );
           }).toList(),
+        ),
+      ],
+    );
+  }
+
+  /// 메모 입력 위젯
+  Widget _buildMemoInput() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '📝 메모 (선택)',
+          style: AppTextStyles.body.copyWith(
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.s),
+        TextField(
+          controller: _memoController,
+          maxLines: 2,
+          decoration: InputDecoration(
+            hintText: '메모를 입력하세요',
+            hintStyle: AppTextStyles.body.copyWith(
+              color: AppColors.textDisabled,
+            ),
+            filled: true,
+            fillColor: AppColors.background,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.primaryPurple),
+            ),
+            contentPadding: const EdgeInsets.all(AppSpacing.m),
+          ),
         ),
       ],
     );
@@ -368,21 +401,26 @@ class _StageEditBottomSheetState extends State<StageEditBottomSheet> {
   }
 
   void _handleSave() {
+    final memoText = _memoController.text.trim();
     SimpleTreatmentStage updatedStage;
 
     if (widget.stage.type.usesStartDateOnly) {
-      // 과배란, 이식대기: startDate 사용
+      // 배란유도: startDate 사용
       updatedStage = widget.stage.copyWith(
         startDate: _selectedDate,
         count: _count,
-        result: _result,
+        cultureDay: _cultureDay,
+        memo: memoText.isNotEmpty ? memoText : null,
+        clearMemo: memoText.isEmpty,
       );
     } else {
-      // 채취, 이식, 판정: date 사용
+      // 배란주사, 채취, 이식, 동결: date 사용
       updatedStage = widget.stage.copyWith(
         date: _selectedDate,
         count: _count,
-        result: _result,
+        cultureDay: _cultureDay,
+        memo: memoText.isNotEmpty ? memoText : null,
+        clearMemo: memoText.isEmpty,
       );
     }
 

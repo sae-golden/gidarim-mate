@@ -1,7 +1,11 @@
+import 'dart:convert';
 import 'package:alarm/alarm.dart';
 import 'package:flutter/foundation.dart';
-import '../models/notification_settings.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'notification_settings_service.dart';
+
+/// 알람 데이터 저장 키
+const String _alarmDataKey = 'alarm_data_';
 
 /// 알람 서비스 (끌 때까지 울리는 알람 스타일)
 class AlarmService {
@@ -45,6 +49,19 @@ class AlarmService {
 
     final typeText = isInjection ? '주사' : '약';
     final emoji = isInjection ? '💉' : '💊';
+    final typeStr = isInjection ? 'injection' : 'oral';
+
+    // 알람 데이터 저장 (풀스크린 화면에서 사용)
+    final alarmData = {
+      'medicationId': medicationId,
+      'medicationName': medicationName,
+      'type': typeStr,
+      'dosage': dosage,
+      'scheduledTime': scheduledTime.toIso8601String(),
+      'isReminder': false,
+      'reminderCount': 0,
+    };
+    await _saveAlarmData(id, jsonEncode(alarmData));
 
     final alarmSettings = AlarmSettings(
       id: id,
@@ -52,9 +69,9 @@ class AlarmService {
       assetAudioPath: 'assets/alarm_sound.mp3',
       loopAudio: settings.alarmStyle, // 알람 스타일이면 반복
       vibrate: true,
-      volume: 0.8,
+      volume: settings.alarmVolume, // 설정된 음량 사용
       fadeDuration: 3.0,
-      warningNotificationOnKill: Platform.isIOS,
+      warningNotificationOnKill: PlatformHelper.isIOS,
       androidFullScreenIntent: true,
       notificationSettings: NotificationSettings(
         title: '$emoji $medicationName $typeText 시간',
@@ -65,7 +82,7 @@ class AlarmService {
     );
 
     await Alarm.set(alarmSettings: alarmSettings);
-    debugPrint('알람 설정됨: $medicationName at $scheduledTime');
+    debugPrint('알람 설정됨: $medicationName at $scheduledTime (id=$id)');
   }
 
   /// 미리 알림 설정 (일반 푸시 알림)
@@ -103,23 +120,52 @@ class AlarmService {
     required bool isInjection,
     String? dosage,
     int? customIntervalMinutes,
+    int reminderCount = 1,
   }) async {
     final settings = await NotificationSettingsService.getSettings();
 
     final intervalMinutes =
         customIntervalMinutes ?? settings.repeatIntervalMinutes;
     final snoozeTime = DateTime.now().add(Duration(minutes: intervalMinutes));
+    final snoozeId = id + 10000 + (reminderCount * 1000); // 재알림 ID
 
-    await setMedicationAlarm(
-      id: id + 10000, // 재알림은 ID 오프셋 추가
-      medicationId: medicationId,
-      medicationName: medicationName,
-      scheduledTime: snoozeTime,
-      isInjection: isInjection,
-      dosage: dosage,
+    final typeStr = isInjection ? 'injection' : 'oral';
+
+    // 알람 데이터 저장 (풀스크린 화면에서 사용)
+    final alarmData = {
+      'medicationId': medicationId,
+      'medicationName': medicationName,
+      'type': typeStr,
+      'dosage': dosage,
+      'scheduledTime': DateTime.now().toIso8601String(), // 원래 예정 시간
+      'isReminder': true,
+      'reminderCount': reminderCount,
+    };
+    await _saveAlarmData(snoozeId, jsonEncode(alarmData));
+
+    final typeText = isInjection ? '주사' : '약';
+    final emoji = isInjection ? '💉' : '💊';
+
+    final alarmSettings = AlarmSettings(
+      id: snoozeId,
+      dateTime: snoozeTime,
+      assetAudioPath: 'assets/alarm_sound.mp3',
+      loopAudio: settings.alarmStyle,
+      vibrate: true,
+      volume: settings.alarmVolume,
+      fadeDuration: 3.0,
+      warningNotificationOnKill: PlatformHelper.isIOS,
+      androidFullScreenIntent: true,
+      notificationSettings: NotificationSettings(
+        title: '$emoji $medicationName $typeText 시간',
+        body: '⚠️ 아직 복용 전이에요!',
+        stopButton: '중지',
+        icon: 'ic_launcher',
+      ),
     );
 
-    debugPrint('재알림 설정됨: $medicationName at $snoozeTime');
+    await Alarm.set(alarmSettings: alarmSettings);
+    debugPrint('재알림 설정됨: $medicationName at $snoozeTime (id=$snoozeId, reminder=$reminderCount)');
   }
 
   /// 알람 중지
@@ -136,21 +182,21 @@ class AlarmService {
 
   /// 특정 알람이 설정되어 있는지 확인
   static Future<bool> isAlarmSet(int id) async {
-    final alarms = Alarm.getAlarms();
+    final alarms = await Alarm.getAlarms();
     return alarms.any((a) => a.id == id);
   }
 
   /// 설정된 모든 알람 조회
-  static List<AlarmSettings> getAllAlarms() {
-    return Alarm.getAlarms();
+  static Future<List<AlarmSettings>> getAllAlarms() async {
+    return await Alarm.getAlarms();
   }
 
   /// 알람 스트림 (알람 울릴 때 이벤트)
   static Stream<AlarmSettings> get ringStream => Alarm.ringStream.stream;
 }
 
-/// Platform 체크용 (kIsWeb 외)
-class Platform {
+/// Platform 체크용 헬퍼 (dart:io의 Platform과 충돌 방지)
+class PlatformHelper {
   static bool get isIOS {
     try {
       return defaultTargetPlatform == TargetPlatform.iOS;
@@ -166,4 +212,10 @@ class Platform {
       return false;
     }
   }
+}
+
+/// 알람 데이터 저장
+Future<void> _saveAlarmData(int alarmId, String data) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString('$_alarmDataKey$alarmId', data);
 }

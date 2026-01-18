@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>시험관메이트 - 주사 알람</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(180deg, #EFF6FF 0%, #FFFFFF 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 24px;
+    }
+    
+    .alarm-container {
+      width: 100%;
+      max-width: 380px;
+      text-align: center;
+    }
+    
+    /* 시간 표시 */
+    .time {
+      font-size: 48px;
+      font-weight: 300;
+      color: #333;
+      margin-bottom: 8px;
+    }
+    
+    .date {
+      font-size: 16px;
+      color: #888;
+      margin-bottom: 48px;
+    }
+    
+    /* 아이콘 */
+    .icon-wrapper {
+      width: 100px;
+      height: 100px;
+      background: linear-gradient(135deg, #BFDBFE 0%, #93C5FD 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    
+    .icon {
+      font-size: 48px;
+    }
+    
+    /* 약물 정보 */
+    .medication-name {
+      font-size: 28px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+    
+    .medication-type {
+      display: inline-block;
+      background: #DBEAFE;
+      color: #2563EB;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 32px;
+    }
+    
+    /* 부위 선택 */
+    .site-selection {
+      background: white;
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 32px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    
+    .site-header {
+      font-size: 15px;
+      color: #666;
+      margin-bottom: 20px;
+    }
+    
+    .site-options {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+    
+    .site-option {
+      flex: 1;
+      padding: 16px;
+      border: 2px solid #E5E7EB;
+      border-radius: 16px;
+      background: white;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .site-option:hover {
+      border-color: #9B7ED9;
+      background: #FAF5FF;
+    }
+    
+    .site-option.selected {
+      border-color: #9B7ED9;
+      background: #F3E8FF;
+    }
+    
+    .site-option.recent {
+      position: relative;
+    }
+    
+    .site-option.recent::after {
+      content: '최근';
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      background: #FEF3C7;
+      color: #B45309;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    
+    .site-emoji {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+    
+    .site-label {
+      font-size: 15px;
+      font-weight: 500;
+      color: #333;
+    }
+    
+    /* 버튼 */
+    .button-container {
+      width: 100%;
+    }
+    
+    .btn-complete {
+      width: 100%;
+      padding: 18px;
+      font-size: 18px;
+      font-weight: 600;
+      color: white;
+      background: linear-gradient(135deg, #60A5FA 0%, #3B82F6 100%);
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      margin-bottom: 16px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .btn-complete:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+    }
+    
+    .btn-complete:disabled {
+      background: #D1D5DB;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    
+    .btn-snooze {
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="alarm-container">
+    <div class="time">밤 10:00</div>
+    <div class="date">1월 6일 월요일</div>
+    
+    <div class="icon-wrapper">
+      <span class="icon">💉</span>
+    </div>
+    
+    <div class="medication-name">고나엘에프</div>
+    <div class="medication-type">주사</div>
+    
+    <div class="site-selection">
+      <div class="site-header">어디에 맞았나요?</div>
+      <div class="site-options">
+        <div class="site-option recent" onclick="selectSite(this)">
+          <div class="site-emoji">👈</div>
+          <div class="site-label">왼쪽</div>
+        </div>
+        <div class="site-option selected" onclick="selectSite(this)">
+          <div class="site-emoji">👉</div>
+          <div class="site-label">오른쪽</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="button-container">
+      <button class="btn-complete">맞았어요</button>
+      <button class="btn-snooze">조금 이따 알려줘</button>
+    </div>
+  </div>
+
+  <script>
+    function selectSite(element) {
+      document.querySelectorAll('.site-option').forEach(el => {
+        el.classList.remove('selected');
+      });
+      element.classList.add('selected');
+    }
+  </script>
+
+</body>
+</html>

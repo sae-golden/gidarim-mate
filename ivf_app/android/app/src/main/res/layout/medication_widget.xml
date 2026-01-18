@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@drawable/widget_background">
+
+    <!-- 헤더 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="오늘의 약"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#1a1a2e" />
+
+        <TextView
+            android:id="@+id/widget_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="12/28"
+            android:textSize="12sp"
+            android:textColor="#666666" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:background="#E0E0E0" />
+
+    <!-- 약물 리스트 -->
+    <LinearLayout
+        android:id="@+id/medication_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <!-- 약물 1 -->
+        <LinearLayout
+            android:id="@+id/med_item_1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingVertical="6dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/med_time_1"
+                android:layout_width="50dp"
+                android:layout_height="wrap_content"
+                android:text="08:00"
+                android:textSize="12sp"
+                android:textColor="#7C3AED" />
+
+            <TextView
+                android:id="@+id/med_name_1"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="약물명"
+                android:textSize="14sp"
+                android:textColor="#1a1a2e"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <ImageView
+                android:id="@+id/med_check_1"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@android:drawable/checkbox_off_background" />
+        </LinearLayout>
+
+        <!-- 약물 2 -->
+        <LinearLayout
+            android:id="@+id/med_item_2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingVertical="6dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/med_time_2"
+                android:layout_width="50dp"
+                android:layout_height="wrap_content"
+                android:text="12:00"
+                android:textSize="12sp"
+                android:textColor="#7C3AED" />
+
+            <TextView
+                android:id="@+id/med_name_2"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="약물명"
+                android:textSize="14sp"
+                android:textColor="#1a1a2e"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <ImageView
+                android:id="@+id/med_check_2"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@android:drawable/checkbox_off_background" />
+        </LinearLayout>
+
+        <!-- 약물 3 -->
+        <LinearLayout
+            android:id="@+id/med_item_3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingVertical="6dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/med_time_3"
+                android:layout_width="50dp"
+                android:layout_height="wrap_content"
+                android:text="18:00"
+                android:textSize="12sp"
+                android:textColor="#7C3AED" />
+
+            <TextView
+                android:id="@+id/med_name_3"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="약물명"
+                android:textSize="14sp"
+                android:textColor="#1a1a2e"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <ImageView
+                android:id="@+id/med_check_3"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@android:drawable/checkbox_off_background" />
+        </LinearLayout>
+
+        <!-- 약물 4 -->
+        <LinearLayout
+            android:id="@+id/med_item_4"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingVertical="6dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/med_time_4"
+                android:layout_width="50dp"
+                android:layout_height="wrap_content"
+                android:text="22:00"
+                android:textSize="12sp"
+                android:textColor="#7C3AED" />
+
+            <TextView
+                android:id="@+id/med_name_4"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="약물명"
+                android:textSize="14sp"
+                android:textColor="#1a1a2e"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <ImageView
+                android:id="@+id/med_check_4"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@android:drawable/checkbox_off_background" />
+        </LinearLayout>
+
+        <!-- 약물 없음 메시지 -->
+        <TextView
+            android:id="@+id/empty_message"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="오늘 복용할 약이 없어요"
+            android:textSize="14sp"
+            android:textColor="#999999"
+            android:gravity="center"
+            android:paddingVertical="20dp"
+            android:visibility="visible" />
+
+    </LinearLayout>
+
+    <!-- 하단 진행률 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="8dp">
+
+        <ProgressBar
+            android:id="@+id/progress_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_height="6dp"
+            android:layout_weight="1"
+            android:max="100"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_progress" />
+
+        <TextView
+            android:id="@+id/progress_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="0/0"
+            android:textSize="12sp"
+            android:textColor="#7C3AED" />
+    </LinearLayout>
+
+</LinearLayout>

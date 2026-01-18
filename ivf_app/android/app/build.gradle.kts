@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.ivf_app"
+    namespace = "com.ivfmate.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,8 +21,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.ivf_app"
+        // 프로덕션용 Application ID
+        applicationId = "com.ivfmate.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -31,11 +31,28 @@ android {
         versionName = flutter.versionName
     }
 
+    // release 서명 설정 (keystore 파일 필요)
+    signingConfigs {
+        create("release") {
+            // key.properties 파일에서 읽어오도록 설정 필요
+            // storeFile = file("upload-keystore.jks")
+            // storePassword = "YOUR_STORE_PASSWORD"
+            // keyAlias = "upload"
+            // keyPassword = "YOUR_KEY_PASSWORD"
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // TODO: release 서명 설정 후 아래 줄의 주석을 해제하세요
+            // signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("debug") // 임시: 테스트용
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
