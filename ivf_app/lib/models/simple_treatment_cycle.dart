@@ -774,14 +774,28 @@ enum BloodTestType {
 extension BloodTestTypeExtension on BloodTestType {
   String get displayName {
     switch (this) {
-      case BloodTestType.e2: return 'E2 (에스트라디올)';
+      case BloodTestType.e2: return '에스트로겐';
+      case BloodTestType.fsh: return '난포자극호르몬';
+      case BloodTestType.lh: return '황체형성호르몬';
+      case BloodTestType.p4: return '황체호르몬';
+      case BloodTestType.hcg: return '임신호르몬';
+      case BloodTestType.amh: return '난소예비력';
+      case BloodTestType.tsh: return '갑상선호르몬';
+      case BloodTestType.vitD: return '비타민D';
+    }
+  }
+
+  /// 영문 약어 (기존 데이터 호환용)
+  String get shortName {
+    switch (this) {
+      case BloodTestType.e2: return 'E2';
       case BloodTestType.fsh: return 'FSH';
       case BloodTestType.lh: return 'LH';
-      case BloodTestType.p4: return 'P4 (프로게스테론)';
+      case BloodTestType.p4: return 'P4';
       case BloodTestType.hcg: return 'β-hCG';
       case BloodTestType.amh: return 'AMH';
       case BloodTestType.tsh: return 'TSH';
-      case BloodTestType.vitD: return 'Vit D';
+      case BloodTestType.vitD: return 'VitD';
     }
   }
 
@@ -879,21 +893,21 @@ class BloodTest {
     return result;
   }
 
-  /// 요약 텍스트 (타임라인 표시용)
+  /// 요약 텍스트 (타임라인 표시용) - 한글화
   String get summaryText {
     final parts = <String>[];
-    if (e2 != null) parts.add('E2: ${e2!.toStringAsFixed(0)}');
-    if (fsh != null) parts.add('FSH: ${fsh!.toStringAsFixed(1)}');
-    if (lh != null) parts.add('LH: ${lh!.toStringAsFixed(1)}');
-    if (p4 != null) parts.add('P4: ${p4!.toStringAsFixed(1)}');
-    if (hcg != null) parts.add('hCG: ${hcg!.toStringAsFixed(0)}');
-    if (amh != null) parts.add('AMH: ${amh!.toStringAsFixed(2)}');
-    if (tsh != null) parts.add('TSH: ${tsh!.toStringAsFixed(2)}');
-    if (vitD != null) parts.add('VitD: ${vitD!.toStringAsFixed(0)}');
+    if (e2 != null) parts.add('에스트로겐: ${e2!.toStringAsFixed(0)}');
+    if (fsh != null) parts.add('난포자극호르몬: ${fsh!.toStringAsFixed(1)}');
+    if (lh != null) parts.add('황체형성호르몬: ${lh!.toStringAsFixed(1)}');
+    if (p4 != null) parts.add('황체호르몬: ${p4!.toStringAsFixed(1)}');
+    if (hcg != null) parts.add('임신호르몬: ${hcg!.toStringAsFixed(0)}');
+    if (amh != null) parts.add('난소예비력: ${amh!.toStringAsFixed(2)}');
+    if (tsh != null) parts.add('갑상선호르몬: ${tsh!.toStringAsFixed(2)}');
+    if (vitD != null) parts.add('비타민D: ${vitD!.toStringAsFixed(0)}');
 
     if (parts.isEmpty) return '';
-    if (parts.length <= 3) return parts.join(' · ');
-    return '${parts.take(3).join(' · ')} 외 ${parts.length - 3}개';
+    if (parts.length <= 2) return parts.join(' · ');
+    return '${parts.take(2).join(' · ')} 외 ${parts.length - 2}개';
   }
 
   /// 값이 하나라도 있는지 확인

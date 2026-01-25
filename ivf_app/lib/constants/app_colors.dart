@@ -16,11 +16,11 @@ class AppColors {
   static const Color textSecondary = Color(0xFF999999); // 보조 텍스트
   static const Color textDisabled = Color(0xFFCCCCCC); // 비활성 텍스트
   
-  // Status Colors (상태색상)
-  static const Color success = Color(0xFF10B981); // 완료, 성공 (초록)
+  // Status Colors (상태색상) - 파스텔 톤 통일
+  static const Color success = Color(0xFFA78BFA); // 완료, 성공 (선명한 보라)
   static const Color warning = Color(0xFFFFD9B3); // 주의, 알림
   static const Color warningLight = Color(0xFFFFF4E5); // 주의 배경
-  static const Color error = Color(0xFFFFB3B3); // 오류, 미완료
+  static const Color error = Color(0xFFFF8A8A); // 오류, 미완료 (진한 핑크)
   static const Color info = Color(0xFFB3D9FF); // 정보
   
   // Gradient (그라데이션)

@@ -14,13 +14,14 @@ import '../widgets/injection_site_bottom_sheet.dart';
 import '../widgets/rating_request_sheet.dart';
 import '../widgets/store_review_sheet.dart';
 import '../widgets/feedback_sheet.dart';
+import '../widgets/completion_overlay.dart';
+import '../widgets/medication_action_bottom_sheet.dart';
 import '../models/medication.dart';
 import '../models/treatment_stage.dart';
 import '../models/treatment_cycle.dart';
 import '../services/medication_storage_service.dart';
 import '../services/home_widget_service.dart';
 import '../services/rating_service.dart';
-import '../services/cloud_storage_service.dart';
 import 'quick_add_medication_screen.dart';
 import 'add_medication_screen.dart';
 import 'voice_input_screen.dart';
@@ -159,13 +160,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 title: '처방전 사진 찍기 (추후지원)',
                 subtitle: '준비 중이에요',
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('준비 중입니다'),
-                      backgroundColor: AppColors.success,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
+                  _showTopToast('준비 중입니다');
                 },
                 isDisabled: true,
               ),
@@ -802,8 +797,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// 약물 수정 화면 열기
+  /// 약물 클릭 시 액션 모달 표시
   Future<void> _openMedicationEdit(Medication medication) async {
+    final isCompleted = _medicationStatus[medication.id] ?? false;
+
+    final result = await MedicationActionBottomSheet.show(
+      context,
+      medicationName: medication.name,
+      date: DateTime.now(),
+      isCompleted: isCompleted,
+    );
+
+    if (result == null) return;
+
+    switch (result) {
+      case MedicationActionResult.complete:
+        await _handleMedicationComplete(medication);
+        break;
+      case MedicationActionResult.skip:
+        await _handleMedicationUncomplete(medication);
+        break;
+      case MedicationActionResult.edit:
+        await _navigateToEditScreen(medication);
+        break;
+      case MedicationActionResult.delete:
+        await _showDeleteConfirmDialog(medication);
+        break;
+    }
+  }
+
+  /// 약물 수정 화면으로 이동
+  Future<void> _navigateToEditScreen(Medication medication) async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -816,6 +840,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // 수정 또는 삭제 후 목록 새로고침
     if (result != null) {
       _loadMedications();
+    }
+  }
+
+  /// 삭제 확인 다이얼로그
+  Future<void> _showDeleteConfirmDialog(Medication medication) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('약물 삭제'),
+        content: Text('${medication.name}을(를) 삭제하시겠어요?\n\n이 작업은 되돌릴 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              '취소',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              '삭제',
+              style: TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _deleteMedication(medication);
+    }
+  }
+
+  /// 약물 삭제
+  Future<void> _deleteMedication(Medication medication) async {
+    try {
+      await MedicationStorageService.deleteMedication(medication.id, addToSyncQueue: false);
+      await _loadMedications();
+
+      if (mounted) {
+        _showTopToast('${medication.name}이(가) 삭제되었습니다');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showTopToast('삭제 실패: $e', isError: true);
+      }
     }
   }
 
@@ -885,31 +959,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     // 완료 스낵바 표시
     if (mounted && others.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white),
-              const SizedBox(width: 8),
-              Text(
-                others.length == 1
-                    ? '${others.first.name} 복용 완료!'
-                    : '${others.length}개 약물 복용 완료!',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: AppColors.primaryPurple,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      final message = others.length == 1
+          ? '${others.first.name} 복용 완료!'
+          : '${others.length}개 약물 복용 완료!';
+      _showTopToast(message);
     }
   }
 
@@ -959,7 +1012,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         );
 
-        // 축하 애니메이션이 바텀시트에 포함되어 있으므로 별도 다이얼로그 불필요
+        // 모달 닫힘 후 약간의 딜레이 후 축하 애니메이션 표시
+        if (mounted) {
+          await Future.delayed(const Duration(milliseconds: 100));
+          if (mounted) {
+            CompletionOverlay.show(
+              context,
+              medicationName: medication.name,
+              isInjection: true,
+            );
+          }
+        }
 
         wasCompleted = true;
       }
@@ -976,42 +1039,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.check_circle, color: Colors.white),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${medication.name} 복용 완료!',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  EncouragementMessages.getMedicationMessage(),
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: AppColors.primaryPurple,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            duration: const Duration(seconds: 3),
-          ),
+        // 탭하면 닫히는 완료 오버레이 표시
+        CompletionOverlay.show(
+          context,
+          medicationName: medication.name,
+          isInjection: false,
         );
       }
 
@@ -1040,26 +1072,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.undo, color: Colors.white),
-              const SizedBox(width: 8),
-              Text(
-                '${medication.name} 복용 취소됨',
-                style: const TextStyle(color: Colors.white),
-              ),
-            ],
-          ),
-          backgroundColor: AppColors.textSecondary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      _showTopToast('${medication.name} 복용 취소됨');
     }
 
     // 캘린더 화면 동기화
@@ -1183,32 +1196,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           debugPrint('📊 디바이스 정보 수집 실패: $e');
         }
 
-        // Supabase에 피드백 저장
-        final success = await CloudStorageService.saveFeedback(
-          stars: stars,
-          category: category,
-          content: content,
-          appVersion: appVersion,
-          osType: osType,
-          osVersion: osVersion,
-          deviceModel: deviceModel,
-        );
+        // 피드백 기록 (로컬)
+        debugPrint('📊 피드백: $stars점, $category, $content');
+        await RatingService().recordFeedbackSubmitted();
 
-        if (success) {
-          await RatingService().recordFeedbackSubmitted();
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('소중한 의견 감사합니다! 더 나은 앱이 되도록 노력할게요 💚'),
-                backgroundColor: AppColors.success,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            );
-          }
+        if (mounted) {
+          _showTopToast('소중한 의견 감사합니다! 더 나은 앱이 되도록 노력할게요 💚');
         }
       },
       onSkip: () {
@@ -1337,6 +1330,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             );
           }),
         ],
+      ),
+    );
+  }
+
+  /// 하단 토스트 표시 (탭바 위)
+  void _showTopToast(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+        ),
+        backgroundColor: isError ? AppColors.error : AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.only(
+          bottom: 70, // 탭바 위
+          left: 16,
+          right: 16,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
