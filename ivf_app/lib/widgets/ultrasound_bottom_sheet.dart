@@ -57,6 +57,8 @@ class _UltrasoundBottomSheetState extends State<UltrasoundBottomSheet> {
   final List<TextEditingController> _follicleControllers = [];
   late TextEditingController _endometriumController;
   late TextEditingController _memoController;
+  final ScrollController _scrollController = ScrollController();
+  final FocusNode _memoFocusNode = FocusNode();
 
   bool get isEditing => widget.existingRecord != null;
 
@@ -83,6 +85,23 @@ class _UltrasoundBottomSheetState extends State<UltrasoundBottomSheet> {
       // 기본 1개 난포 입력 필드
       _follicleControllers.add(TextEditingController());
     }
+
+    // 메모 필드 포커스 시 스크롤
+    _memoFocusNode.addListener(_onMemoFocusChange);
+  }
+
+  void _onMemoFocusChange() {
+    if (_memoFocusNode.hasFocus) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
   }
 
   @override
@@ -92,6 +111,9 @@ class _UltrasoundBottomSheetState extends State<UltrasoundBottomSheet> {
     }
     _endometriumController.dispose();
     _memoController.dispose();
+    _scrollController.dispose();
+    _memoFocusNode.removeListener(_onMemoFocusChange);
+    _memoFocusNode.dispose();
     super.dispose();
   }
 
@@ -147,6 +169,7 @@ class _UltrasoundBottomSheetState extends State<UltrasoundBottomSheet> {
           // 스크롤 가능 영역
           Expanded(
             child: SingleChildScrollView(
+              controller: _scrollController,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -429,6 +452,7 @@ class _UltrasoundBottomSheetState extends State<UltrasoundBottomSheet> {
         const SizedBox(height: AppSpacing.s),
         TextField(
           controller: _memoController,
+          focusNode: _memoFocusNode,
           maxLines: 3,
           decoration: InputDecoration(
             hintText: '메모를 입력하세요',

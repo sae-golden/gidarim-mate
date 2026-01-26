@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
 import '../constants/app_spacing.dart';
-import '../services/notification_service.dart';
 import '../services/medication_storage_service.dart';
 import '../widgets/injection_site_bottom_sheet.dart';
 import 'home_screen.dart';
@@ -66,6 +65,34 @@ class _CalendarScreenRefreshState extends State<CalendarScreenRefreshable> {
   }
 }
 
+/// SimpleRecordScreen을 감싸는 새로고침 가능한 위젯
+class SimpleRecordScreenRefreshable extends StatefulWidget {
+  final VoidCallback? onRecordChanged;
+
+  const SimpleRecordScreenRefreshable({super.key, this.onRecordChanged});
+
+  @override
+  State<SimpleRecordScreenRefreshable> createState() => _SimpleRecordScreenRefreshState();
+}
+
+class _SimpleRecordScreenRefreshState extends State<SimpleRecordScreenRefreshable> {
+  Key _refreshKey = UniqueKey();
+
+  void refresh() {
+    setState(() {
+      _refreshKey = UniqueKey();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SimpleRecordScreen(
+      key: _refreshKey,
+      onRecordChanged: widget.onRecordChanged,
+    );
+  }
+}
+
 /// 메인 화면 (하단 네비게이션 포함)
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -76,10 +103,12 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+  int _previousIndex = 0;
 
   // 화면 갱신을 위한 GlobalKey
   final GlobalKey<_HomeScreenRefreshState> _homeKey = GlobalKey();
   final GlobalKey<_CalendarScreenRefreshState> _calendarKey = GlobalKey();
+  final GlobalKey<_SimpleRecordScreenRefreshState> _recordKey = GlobalKey();
 
   late final List<Widget> _screens;
 
@@ -92,12 +121,12 @@ class _MainScreenState extends State<MainScreen> {
         onMedicationStatusChanged: _refreshCalendar,
       ),
       CalendarScreenRefreshable(key: _calendarKey),
-      const SimpleRecordScreen(),
+      SimpleRecordScreenRefreshable(
+        key: _recordKey,
+        onRecordChanged: _onRecordChanged,
+      ),
       const SettingsScreen(),
     ];
-
-    // 주사 완료 시 부위 선택 다이얼로그 표시 콜백 설정
-    NotificationService.onInjectionComplete = _showInjectionLocationDialog;
   }
 
   /// 캘린더 화면 새로고침
@@ -105,10 +134,14 @@ class _MainScreenState extends State<MainScreen> {
     _calendarKey.currentState?.refresh();
   }
 
+  /// 기록 변경 시 캘린더와 홈 새로고침
+  void _onRecordChanged() {
+    _calendarKey.currentState?.refresh();
+    _homeKey.currentState?.refresh();
+  }
+
   @override
   void dispose() {
-    // 콜백 해제
-    NotificationService.onInjectionComplete = null;
     super.dispose();
   }
 
@@ -286,9 +319,22 @@ class _MainScreenState extends State<MainScreen> {
 
     return GestureDetector(
       onTap: () {
+        _previousIndex = _currentIndex;
         setState(() {
           _currentIndex = index;
         });
+        // 기록 탭에서 다른 탭으로 이동 시 해당 탭 새로고침
+        if (_previousIndex == 2 && index != 2) {
+          if (index == 0) {
+            _homeKey.currentState?.refresh();
+          } else if (index == 1) {
+            _calendarKey.currentState?.refresh();
+          }
+        }
+        // 캘린더 탭으로 이동 시 항상 새로고침
+        if (index == 1 && _previousIndex != 1) {
+          _calendarKey.currentState?.refresh();
+        }
       },
       behavior: HitTestBehavior.opaque,
       child: Container(

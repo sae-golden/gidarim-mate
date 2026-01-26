@@ -11,6 +11,7 @@ class AdditionalRecordService {
   static const String _ultrasoundRecordsKey = 'ultrasound_records';
   static const String _pregnancyTestRecordsKey = 'pregnancy_test_records';
   static const String _conditionRecordsKey = 'condition_records';
+  static const String _hospitalVisitRecordsKey = 'hospital_visit_records';
 
   // ============================================================
   // 생리 시작일 기록
@@ -40,6 +41,12 @@ class AdditionalRecordService {
     return all.where((r) => r.cycleId == cycleId).toList();
   }
 
+  /// 사이클에 연결되지 않은 생리 시작일 기록 조회
+  static Future<List<PeriodRecord>> getOrphanPeriodRecords() async {
+    final all = await getAllPeriodRecords();
+    return all.where((r) => r.cycleId == null || r.cycleId!.isEmpty).toList();
+  }
+
   /// 특정 날짜 범위의 생리 시작일 기록 조회
   static Future<List<PeriodRecord>> getPeriodRecordsByDateRange(
     DateTime start,
@@ -54,26 +61,41 @@ class AdditionalRecordService {
 
   /// 생리 시작일 기록 추가
   static Future<void> addPeriodRecord(PeriodRecord record) async {
-    final records = await getAllPeriodRecords();
-    records.add(record);
-    await _savePeriodRecords(records);
+    try {
+      final records = await getAllPeriodRecords();
+      records.add(record);
+      await _savePeriodRecords(records);
+    } catch (e) {
+      debugPrint('생리 기록 추가 오류: $e');
+      rethrow;
+    }
   }
 
   /// 생리 시작일 기록 수정
   static Future<void> updatePeriodRecord(PeriodRecord record) async {
-    final records = await getAllPeriodRecords();
-    final index = records.indexWhere((r) => r.id == record.id);
-    if (index != -1) {
-      records[index] = record;
-      await _savePeriodRecords(records);
+    try {
+      final records = await getAllPeriodRecords();
+      final index = records.indexWhere((r) => r.id == record.id);
+      if (index != -1) {
+        records[index] = record;
+        await _savePeriodRecords(records);
+      }
+    } catch (e) {
+      debugPrint('생리 기록 수정 오류: $e');
+      rethrow;
     }
   }
 
   /// 생리 시작일 기록 삭제
   static Future<void> deletePeriodRecord(String id) async {
-    final records = await getAllPeriodRecords();
-    records.removeWhere((r) => r.id == id);
-    await _savePeriodRecords(records);
+    try {
+      final records = await getAllPeriodRecords();
+      records.removeWhere((r) => r.id == id);
+      await _savePeriodRecords(records);
+    } catch (e) {
+      debugPrint('생리 기록 삭제 오류: $e');
+      rethrow;
+    }
   }
 
   static Future<void> _savePeriodRecords(List<PeriodRecord> records) async {
@@ -110,6 +132,12 @@ class AdditionalRecordService {
     return all.where((r) => r.cycleId == cycleId).toList();
   }
 
+  /// 사이클에 연결되지 않은 초음파 검사 기록 조회
+  static Future<List<UltrasoundRecord>> getOrphanUltrasoundRecords() async {
+    final all = await getAllUltrasoundRecords();
+    return all.where((r) => r.cycleId == null || r.cycleId!.isEmpty).toList();
+  }
+
   /// 특정 날짜 범위의 초음파 검사 기록 조회
   static Future<List<UltrasoundRecord>> getUltrasoundRecordsByDateRange(
     DateTime start,
@@ -124,26 +152,41 @@ class AdditionalRecordService {
 
   /// 초음파 검사 기록 추가
   static Future<void> addUltrasoundRecord(UltrasoundRecord record) async {
-    final records = await getAllUltrasoundRecords();
-    records.add(record);
-    await _saveUltrasoundRecords(records);
+    try {
+      final records = await getAllUltrasoundRecords();
+      records.add(record);
+      await _saveUltrasoundRecords(records);
+    } catch (e) {
+      debugPrint('초음파 기록 추가 오류: $e');
+      rethrow;
+    }
   }
 
   /// 초음파 검사 기록 수정
   static Future<void> updateUltrasoundRecord(UltrasoundRecord record) async {
-    final records = await getAllUltrasoundRecords();
-    final index = records.indexWhere((r) => r.id == record.id);
-    if (index != -1) {
-      records[index] = record;
-      await _saveUltrasoundRecords(records);
+    try {
+      final records = await getAllUltrasoundRecords();
+      final index = records.indexWhere((r) => r.id == record.id);
+      if (index != -1) {
+        records[index] = record;
+        await _saveUltrasoundRecords(records);
+      }
+    } catch (e) {
+      debugPrint('초음파 기록 수정 오류: $e');
+      rethrow;
     }
   }
 
   /// 초음파 검사 기록 삭제
   static Future<void> deleteUltrasoundRecord(String id) async {
-    final records = await getAllUltrasoundRecords();
-    records.removeWhere((r) => r.id == id);
-    await _saveUltrasoundRecords(records);
+    try {
+      final records = await getAllUltrasoundRecords();
+      records.removeWhere((r) => r.id == id);
+      await _saveUltrasoundRecords(records);
+    } catch (e) {
+      debugPrint('초음파 기록 삭제 오류: $e');
+      rethrow;
+    }
   }
 
   static Future<void> _saveUltrasoundRecords(List<UltrasoundRecord> records) async {
@@ -180,6 +223,12 @@ class AdditionalRecordService {
     return all.where((r) => r.cycleId == cycleId).toList();
   }
 
+  /// 사이클에 연결되지 않은 임신 테스트 기록 조회
+  static Future<List<PregnancyTestRecord>> getOrphanPregnancyTestRecords() async {
+    final all = await getAllPregnancyTestRecords();
+    return all.where((r) => r.cycleId == null || r.cycleId!.isEmpty).toList();
+  }
+
   /// 특정 날짜 범위의 임신 테스트 기록 조회
   static Future<List<PregnancyTestRecord>> getPregnancyTestRecordsByDateRange(
     DateTime start,
@@ -194,26 +243,41 @@ class AdditionalRecordService {
 
   /// 임신 테스트 기록 추가
   static Future<void> addPregnancyTestRecord(PregnancyTestRecord record) async {
-    final records = await getAllPregnancyTestRecords();
-    records.add(record);
-    await _savePregnancyTestRecords(records);
+    try {
+      final records = await getAllPregnancyTestRecords();
+      records.add(record);
+      await _savePregnancyTestRecords(records);
+    } catch (e) {
+      debugPrint('임신 테스트 기록 추가 오류: $e');
+      rethrow;
+    }
   }
 
   /// 임신 테스트 기록 수정
   static Future<void> updatePregnancyTestRecord(PregnancyTestRecord record) async {
-    final records = await getAllPregnancyTestRecords();
-    final index = records.indexWhere((r) => r.id == record.id);
-    if (index != -1) {
-      records[index] = record;
-      await _savePregnancyTestRecords(records);
+    try {
+      final records = await getAllPregnancyTestRecords();
+      final index = records.indexWhere((r) => r.id == record.id);
+      if (index != -1) {
+        records[index] = record;
+        await _savePregnancyTestRecords(records);
+      }
+    } catch (e) {
+      debugPrint('임신 테스트 기록 수정 오류: $e');
+      rethrow;
     }
   }
 
   /// 임신 테스트 기록 삭제
   static Future<void> deletePregnancyTestRecord(String id) async {
-    final records = await getAllPregnancyTestRecords();
-    records.removeWhere((r) => r.id == id);
-    await _savePregnancyTestRecords(records);
+    try {
+      final records = await getAllPregnancyTestRecords();
+      records.removeWhere((r) => r.id == id);
+      await _savePregnancyTestRecords(records);
+    } catch (e) {
+      debugPrint('임신 테스트 기록 삭제 오류: $e');
+      rethrow;
+    }
   }
 
   static Future<void> _savePregnancyTestRecords(List<PregnancyTestRecord> records) async {
@@ -250,6 +314,12 @@ class AdditionalRecordService {
     return all.where((r) => r.cycleId == cycleId).toList();
   }
 
+  /// 사이클에 연결되지 않은 몸 상태 기록 조회
+  static Future<List<ConditionRecord>> getOrphanConditionRecords() async {
+    final all = await getAllConditionRecords();
+    return all.where((r) => r.cycleId == null || r.cycleId!.isEmpty).toList();
+  }
+
   /// 특정 날짜 범위의 몸 상태 기록 조회
   static Future<List<ConditionRecord>> getConditionRecordsByDateRange(
     DateTime start,
@@ -264,32 +334,138 @@ class AdditionalRecordService {
 
   /// 몸 상태 기록 추가
   static Future<void> addConditionRecord(ConditionRecord record) async {
-    final records = await getAllConditionRecords();
-    records.add(record);
-    await _saveConditionRecords(records);
+    try {
+      final records = await getAllConditionRecords();
+      records.add(record);
+      await _saveConditionRecords(records);
+    } catch (e) {
+      debugPrint('몸 상태 기록 추가 오류: $e');
+      rethrow;
+    }
   }
 
   /// 몸 상태 기록 수정
   static Future<void> updateConditionRecord(ConditionRecord record) async {
-    final records = await getAllConditionRecords();
-    final index = records.indexWhere((r) => r.id == record.id);
-    if (index != -1) {
-      records[index] = record;
-      await _saveConditionRecords(records);
+    try {
+      final records = await getAllConditionRecords();
+      final index = records.indexWhere((r) => r.id == record.id);
+      if (index != -1) {
+        records[index] = record;
+        await _saveConditionRecords(records);
+      }
+    } catch (e) {
+      debugPrint('몸 상태 기록 수정 오류: $e');
+      rethrow;
     }
   }
 
   /// 몸 상태 기록 삭제
   static Future<void> deleteConditionRecord(String id) async {
-    final records = await getAllConditionRecords();
-    records.removeWhere((r) => r.id == id);
-    await _saveConditionRecords(records);
+    try {
+      final records = await getAllConditionRecords();
+      records.removeWhere((r) => r.id == id);
+      await _saveConditionRecords(records);
+    } catch (e) {
+      debugPrint('몸 상태 기록 삭제 오류: $e');
+      rethrow;
+    }
   }
 
   static Future<void> _saveConditionRecords(List<ConditionRecord> records) async {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = jsonEncode(records.map((r) => r.toJson()).toList());
     await prefs.setString(_conditionRecordsKey, jsonString);
+  }
+
+  // ============================================================
+  // 병원 예약 기록
+  // ============================================================
+
+  /// 모든 병원 예약 기록 조회
+  static Future<List<HospitalVisitRecord>> getAllHospitalVisitRecords() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonString = prefs.getString(_hospitalVisitRecordsKey);
+      if (jsonString == null || jsonString.isEmpty) return [];
+
+      final List<dynamic> jsonList = jsonDecode(jsonString);
+      return jsonList
+          .map((json) => HospitalVisitRecord.fromJson(json as Map<String, dynamic>))
+          .toList()
+        ..sort((a, b) => b.date.compareTo(a.date)); // 최신순 정렬
+    } catch (e) {
+      debugPrint('병원 예약 기록 조회 오류: $e');
+      return [];
+    }
+  }
+
+  /// 특정 사이클의 병원 예약 기록 조회
+  static Future<List<HospitalVisitRecord>> getHospitalVisitRecordsByCycle(String cycleId) async {
+    final all = await getAllHospitalVisitRecords();
+    return all.where((r) => r.cycleId == cycleId).toList();
+  }
+
+  /// 사이클에 연결되지 않은 병원 예약 기록 조회
+  static Future<List<HospitalVisitRecord>> getOrphanHospitalVisitRecords() async {
+    final all = await getAllHospitalVisitRecords();
+    return all.where((r) => r.cycleId == null || r.cycleId!.isEmpty).toList();
+  }
+
+  /// 특정 날짜 범위의 병원 예약 기록 조회
+  static Future<List<HospitalVisitRecord>> getHospitalVisitRecordsByDateRange(
+    DateTime start,
+    DateTime end,
+  ) async {
+    final all = await getAllHospitalVisitRecords();
+    return all.where((r) {
+      return r.date.isAfter(start.subtract(const Duration(days: 1))) &&
+          r.date.isBefore(end.add(const Duration(days: 1)));
+    }).toList();
+  }
+
+  /// 병원 예약 기록 추가
+  static Future<void> addHospitalVisitRecord(HospitalVisitRecord record) async {
+    try {
+      final records = await getAllHospitalVisitRecords();
+      records.add(record);
+      await _saveHospitalVisitRecords(records);
+    } catch (e) {
+      debugPrint('병원 예약 기록 추가 오류: $e');
+      rethrow;
+    }
+  }
+
+  /// 병원 예약 기록 수정
+  static Future<void> updateHospitalVisitRecord(HospitalVisitRecord record) async {
+    try {
+      final records = await getAllHospitalVisitRecords();
+      final index = records.indexWhere((r) => r.id == record.id);
+      if (index != -1) {
+        records[index] = record;
+        await _saveHospitalVisitRecords(records);
+      }
+    } catch (e) {
+      debugPrint('병원 예약 기록 수정 오류: $e');
+      rethrow;
+    }
+  }
+
+  /// 병원 예약 기록 삭제
+  static Future<void> deleteHospitalVisitRecord(String id) async {
+    try {
+      final records = await getAllHospitalVisitRecords();
+      records.removeWhere((r) => r.id == id);
+      await _saveHospitalVisitRecords(records);
+    } catch (e) {
+      debugPrint('병원 예약 기록 삭제 오류: $e');
+      rethrow;
+    }
+  }
+
+  static Future<void> _saveHospitalVisitRecords(List<HospitalVisitRecord> records) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = jsonEncode(records.map((r) => r.toJson()).toList());
+    await prefs.setString(_hospitalVisitRecordsKey, jsonString);
   }
 
   // ============================================================
@@ -316,6 +492,9 @@ class AdditionalRecordService {
 
     final conditions = await getConditionRecordsByDateRange(start, end);
     if (conditions.isNotEmpty) result[RecordType.condition] = conditions.length;
+
+    final hospitalVisits = await getHospitalVisitRecordsByDateRange(start, end);
+    if (hospitalVisits.isNotEmpty) result[RecordType.hospitalVisit] = hospitalVisits.length;
 
     return result;
   }
@@ -351,6 +530,11 @@ class AdditionalRecordService {
     final conditions = await getConditionRecordsByDateRange(start, end);
     for (final record in conditions) {
       addRecord(record.date, RecordType.condition);
+    }
+
+    final hospitalVisits = await getHospitalVisitRecordsByDateRange(start, end);
+    for (final record in hospitalVisits) {
+      addRecord(record.date, RecordType.hospitalVisit);
     }
 
     return result;

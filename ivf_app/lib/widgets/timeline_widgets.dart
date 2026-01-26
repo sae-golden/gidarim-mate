@@ -3,6 +3,7 @@ import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
 import '../constants/app_spacing.dart';
 import '../models/simple_treatment_cycle.dart';
+import '../models/additional_records.dart';
 
 /// 타임라인 시작 노드
 /// 기획서: "시작 2025.12.01" 형태
@@ -771,6 +772,113 @@ class TimelineEmpty extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 타임라인 추가 기록 항목 노드
+/// 생리 시작일, 초음파, 임신 테스트, 몸 상태 등
+class TimelineAdditionalRecordWidget extends StatelessWidget {
+  final RecordType recordType;
+  final DateTime date;
+  final String summary;
+  final VoidCallback? onTap;
+
+  const TimelineAdditionalRecordWidget({
+    super.key,
+    required this.recordType,
+    required this.date,
+    required this.summary,
+    this.onTap,
+  });
+
+  String get _dateText {
+    return '${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 타임라인 라인 + 이모지 노드
+            SizedBox(
+              width: 48,
+              child: Column(
+                children: [
+                  // 이모지 원 (타입별 색상)
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: recordType.color.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: recordType.color.withValues(alpha: 0.5),
+                        width: 2,
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        recordType.emoji,
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ),
+                  // 연결 라인
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      constraints: const BoxConstraints(minHeight: 40),
+                      color: const Color(0xFFE9D5FF),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.s),
+            // 구분선
+            Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: Container(
+                width: 16,
+                height: 2,
+                color: const Color(0xFFE9D5FF),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.s),
+            // 내용
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.l),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 타입 텍스트
+                    Text(
+                      recordType.name,
+                      style: AppTextStyles.body.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    // 날짜 및 요약
+                    Text(
+                      '$_dateText · $summary',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

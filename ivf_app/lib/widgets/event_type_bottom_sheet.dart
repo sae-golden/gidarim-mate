@@ -19,6 +19,7 @@ class EventTypeBottomSheet extends StatelessWidget {
   final VoidCallback? onUltrasound; // 초음파 검사
   final VoidCallback? onPregnancyTest; // 임신 테스트
   final VoidCallback? onCondition; // 몸 상태
+  final VoidCallback? onHospitalVisit; // 병원 예약
 
   const EventTypeBottomSheet({
     super.key,
@@ -32,6 +33,7 @@ class EventTypeBottomSheet extends StatelessWidget {
     this.onUltrasound,
     this.onPregnancyTest,
     this.onCondition,
+    this.onHospitalVisit,
   });
 
   /// 바텀시트 표시
@@ -50,6 +52,7 @@ class EventTypeBottomSheet extends StatelessWidget {
     bool showUltrasoundOption = true,
     bool showPregnancyTestOption = true,
     bool showConditionOption = true,
+    bool showHospitalVisitOption = true,
   }) {
     return showModalBottomSheet<dynamic>(
       context: context,
@@ -94,6 +97,11 @@ class EventTypeBottomSheet extends StatelessWidget {
         onCondition: showConditionOption
             ? () {
                 Navigator.pop(context, 'condition');
+              }
+            : null,
+        onHospitalVisit: showHospitalVisitOption
+            ? () {
+                Navigator.pop(context, 'hospitalVisit');
               }
             : null,
       ),
@@ -190,6 +198,11 @@ class EventTypeBottomSheet extends StatelessWidget {
                     RecordType.pregnancyTest.color,
                     onPregnancyTest!,
                   ),
+                  if (onHospitalVisit != null) _buildCompactItem(
+                    RecordType.hospitalVisit.displayText,  // 병원 예약했어요
+                    RecordType.hospitalVisit.color,
+                    onHospitalVisit!,
+                  ),
                   _buildDivider(),
 
                   // 일상 기록 섹션
@@ -200,10 +213,10 @@ class EventTypeBottomSheet extends StatelessWidget {
                     onCondition!,
                   ),
 
-                  // 새로운 시도 시작하기 (맨 아래)
+                  // 새로운 시도 시작하기 (맨 아래, 별도 섹션으로 분리)
                   if (onNewCycle != null) ...[
-                    const SizedBox(height: AppSpacing.m),
-                    _buildNewCycleOption(context),
+                    const SizedBox(height: AppSpacing.l),
+                    _buildNewCycleItem(),
                   ],
 
                   const SizedBox(height: AppSpacing.m),
@@ -290,32 +303,39 @@ class EventTypeBottomSheet extends StatelessWidget {
     );
   }
 
-  /// 새로운 시도 시작하기 버튼
-  Widget _buildNewCycleOption(BuildContext context) {
+  /// 새로운 시도 시작하기 아이템 (리스트 스타일)
+  Widget _buildNewCycleItem() {
     return InkWell(
       onTap: onNewCycle,
-      borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.all(AppSpacing.m),
-        decoration: BoxDecoration(
-          color: AppColors.primaryPurpleLight,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.primaryPurple.withValues(alpha: 0.3)),
-        ),
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
-              '🌱',
-              style: TextStyle(fontSize: 20),
-            ),
-            const SizedBox(width: AppSpacing.s),
-            Text(
-              '새로운 시도 시작하기',
-              style: AppTextStyles.body.copyWith(
-                fontWeight: FontWeight.w600,
-                color: AppColors.primaryPurple,
+            // 🌱 이모지 또는 초록색 점
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: Color(0xFF22C55E),  // 초록색
+                shape: BoxShape.circle,
               ),
+            ),
+            const SizedBox(width: AppSpacing.m),
+            // 이름
+            Expanded(
+              child: Text(
+                '새로운 시도 시작하기',
+                style: AppTextStyles.body.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+            // 화살표
+            Icon(
+              Icons.chevron_right,
+              color: AppColors.textDisabled,
+              size: 20,
             ),
           ],
         ),

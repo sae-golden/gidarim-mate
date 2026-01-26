@@ -16,6 +16,7 @@ import '../widgets/store_review_sheet.dart';
 import '../widgets/feedback_sheet.dart';
 import '../widgets/completion_overlay.dart';
 import '../widgets/medication_action_bottom_sheet.dart';
+import '../widgets/confirm_bottom_sheet.dart';
 import '../models/medication.dart';
 import '../models/treatment_stage.dart';
 import '../models/treatment_cycle.dart';
@@ -843,36 +844,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// 삭제 확인 다이얼로그
+  /// 삭제 확인 바텀시트
   Future<void> _showDeleteConfirmDialog(Medication medication) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text('약물 삭제'),
-        content: Text('${medication.name}을(를) 삭제하시겠어요?\n\n이 작업은 되돌릴 수 없습니다.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              '취소',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              '삭제',
-              style: TextStyle(color: AppColors.error),
-            ),
-          ),
-        ],
-      ),
+    final confirmed = await ConfirmBottomSheet.show(
+      context,
+      message: '${medication.name}을(를) 삭제하시겠어요?\n\n이 작업은 되돌릴 수 없습니다.',
+      confirmText: '삭제',
+      cancelText: '취소',
     );
 
-    if (confirmed == true) {
+    if (confirmed) {
       await _deleteMedication(medication);
     }
   }

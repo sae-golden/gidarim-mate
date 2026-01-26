@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/simple_treatment_cycle.dart';
 
@@ -22,11 +23,14 @@ class SimpleTreatmentService {
 
     // 새 키에서 먼저 조회
     var jsonString = prefs.getString(_currentCycleKey);
+    debugPrint('📖 [SimpleTreatmentService] 사이클 로드 시도');
+    debugPrint('   - 키 존재: ${jsonString != null}');
 
     if (jsonString == null) {
       // 레거시 데이터 마이그레이션 시도
       final legacyJson = prefs.getString(_legacyCurrentCycleKey);
       if (legacyJson != null) {
+        debugPrint('   - 레거시 데이터 발견, 마이그레이션 시도');
         try {
           final legacy = SimpleTreatmentCycle.fromJson(
               jsonDecode(legacyJson) as Map<String, dynamic>);
@@ -34,28 +38,44 @@ class SimpleTreatmentService {
           await saveCurrentCycle(migrated);
           return migrated;
         } catch (e) {
-          // 마이그레이션 실패 시 기본값 반환
+          debugPrint('   ❌ 마이그레이션 실패: $e');
         }
       }
 
-      // 기본값: 1차 시도
+      debugPrint('   - 저장된 사이클 없음, 기본값 반환');
       return TreatmentCycle.create(cycleNumber: 1);
     }
 
     try {
       final json = jsonDecode(jsonString) as Map<String, dynamic>;
-      return TreatmentCycle.fromJson(json);
+      final cycle = TreatmentCycle.fromJson(json);
+      debugPrint('   ✅ 사이클 로드 성공: ${cycle.id}');
+      debugPrint('   - 이벤트 수: ${cycle.events.length}');
+      return cycle;
     } catch (e) {
-      // 파싱 실패 시 기본값 반환
+      debugPrint('   ❌ 파싱 실패: $e');
       return TreatmentCycle.create(cycleNumber: 1);
     }
   }
 
   /// 현재 사이클 저장
   static Future<void> saveCurrentCycle(TreatmentCycle cycle) async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonString = jsonEncode(cycle.toJson());
-    await prefs.setString(_currentCycleKey, jsonString);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonString = jsonEncode(cycle.toJson());
+      final success = await prefs.setString(_currentCycleKey, jsonString);
+      debugPrint('💾 [SimpleTreatmentService] 사이클 저장: ${cycle.id}');
+      debugPrint('   - 이벤트 수: ${cycle.events.length}');
+      debugPrint('   - 저장 성공: $success');
+      if (cycle.events.isNotEmpty) {
+        for (final event in cycle.events) {
+          debugPrint('   - 이벤트: ${event.type.name} (${event.date})');
+        }
+      }
+    } catch (e, stack) {
+      debugPrint('❌ [SimpleTreatmentService] 사이클 저장 실패: $e');
+      debugPrint('   스택: $stack');
+    }
   }
 
   /// 사이클 저장 (현재 사이클 업데이트)
@@ -91,9 +111,12 @@ class SimpleTreatmentService {
 
   /// 이벤트 추가
   static Future<TreatmentCycle> addEvent(TreatmentEvent event) async {
+    debugPrint('➕ [SimpleTreatmentService] 이벤트 추가: ${event.type.name}');
+    debugPrint('   - 날짜: ${event.date}');
     final currentCycle = await getCurrentCycle();
     final updatedCycle = currentCycle.addEvent(event);
     await saveCurrentCycle(updatedCycle);
+    debugPrint('   ✅ 이벤트 추가 완료');
     return updatedCycle;
   }
 
@@ -167,11 +190,13 @@ class SimpleTreatmentService {
   /// [cycleNumber]: N차 시도
   /// [isNaturalCycle]: 자연주기 여부 (인공수정만)
   /// [isFrozenTransfer]: 동결배아 이식 여부 (시험관만)
+  /// [startDate]: 시작일 (지정하지 않으면 오늘)
   static Future<TreatmentCycle> startNewCycle({
     TreatmentType type = TreatmentType.ivf,
     int? cycleNumber,
     bool isNaturalCycle = false,
     bool isFrozenTransfer = false,
+    DateTime? startDate,
   }) async {
     final currentCycle = await getCurrentCycle();
     final pastCycles = await getPastCycles();
@@ -200,12 +225,18 @@ class SimpleTreatmentService {
       }
     }
 
-    final newCycle = TreatmentCycle.create(
+    var newCycle = TreatmentCycle.create(
       type: type,
       cycleNumber: newCycleNumber,
       isNaturalCycle: isNaturalCycle,
       isFrozenTransfer: isFrozenTransfer,
     );
+
+    // 시작일이 지정된 경우 업데이트
+    if (startDate != null) {
+      newCycle = newCycle.copyWith(startDate: startDate);
+    }
+
     await saveCurrentCycle(newCycle);
 
     return newCycle;
@@ -349,6 +380,43 @@ class SimpleTreatmentService {
           result[endDateKey] = cycle.result!;
         }
       }
+    }
+
+    return result;
+  }
+
+  /// 날짜 범위 내의 사이클 시작일 조회 (캘린더 연동용)
+  /// 반환: Map<날짜, List<사이클 정보 (cycleNumber, type)>>
+  static Future<Map<DateTime, List<Map<String, dynamic>>>> getCycleStartDatesByRange(
+    DateTime startDate,
+    DateTime endDate,
+  ) async {
+    final hasCycleStarted = await SimpleTreatmentService.hasCycleStarted();
+    if (!hasCycleStarted) return {};
+
+    final currentCycle = await getCurrentCycle();
+    final pastCycles = await getPastCycles();
+
+    final Map<DateTime, List<Map<String, dynamic>>> result = {};
+
+    final allCycles = [currentCycle, ...pastCycles];
+
+    for (final cycle in allCycles) {
+      final cycleStartDate = DateTime(cycle.startDate.year, cycle.startDate.month, cycle.startDate.day);
+
+      // 날짜 범위 체크
+      if (cycleStartDate.isBefore(startDate) || cycleStartDate.isAfter(endDate)) {
+        continue;
+      }
+
+      result.putIfAbsent(cycleStartDate, () => []);
+      result[cycleStartDate]!.add({
+        'cycleNumber': cycle.cycleNumber,
+        'type': cycle.type,
+        'isFrozenTransfer': cycle.isFrozenTransfer,
+        'isNaturalCycle': cycle.isNaturalCycle,
+        'startDate': cycle.startDate,
+      });
     }
 
     return result;

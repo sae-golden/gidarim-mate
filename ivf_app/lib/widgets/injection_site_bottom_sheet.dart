@@ -4,6 +4,7 @@ import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
 import '../constants/app_spacing.dart';
 import 'app_button.dart';
+import 'completion_overlay.dart';
 
 /// 주사 부위 위치 정의
 enum InjectionSitePosition {
@@ -84,42 +85,17 @@ class _InjectionSiteBottomSheetState extends State<InjectionSiteBottomSheet> {
     return widget.lastSide == 'left' ? 'right' : 'left';
   }
 
-  void _onComplete() async {
+  void _onComplete() {
     if (_selectedPosition == null) return;
 
     final selectedSide = _selectedPosition!.side;
 
-    // 전체화면 축하 다이얼로그 표시 (바텀시트 위에)
-    await showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: '',
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return _FullScreenCelebration(
-          onComplete: () {
-            Navigator.pop(context); // 축하 다이얼로그 닫기
-          },
-        );
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        return FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.8, end: 1.0).animate(
-              CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
-            ),
-            child: child,
-          ),
-        );
-      },
-    );
+    // 바텀시트 먼저 닫기
+    Navigator.pop(context, selectedSide);
 
-    // 축하 다이얼로그가 닫힌 후 바텀시트 닫으면서 선택한 부위 반환
-    if (mounted) {
-      Navigator.pop(context, selectedSide);
-    }
+    // 공통 CompletionOverlay로 축하 애니메이션 표시 (컨페티 포함)
+    // Navigator.pop 후에 바텀시트 context 대신 새로운 context가 필요하므로
+    // 호출하는 쪽에서 CompletionOverlay를 표시하도록 함
   }
 
   @override
@@ -178,38 +154,56 @@ class _InjectionSiteBottomSheetState extends State<InjectionSiteBottomSheet> {
           // 새로운 부위 선택 그리드
           _buildNewSiteSelector(),
 
-          // 최근 정보
-          if (widget.lastSide != null) ...[
-            const SizedBox(height: AppSpacing.s),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+          // 추천 안내 메시지
+          const SizedBox(height: AppSpacing.s),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.m),
+            decoration: BoxDecoration(
+              color: AppColors.primaryPurpleLight.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
               children: [
-                const Icon(Icons.history, size: 14, color: AppColors.textSecondary),
-                const SizedBox(width: 4),
-                Text(
-                  '최근: ${widget.lastSide == 'left' ? '왼쪽' : '오른쪽'}',
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+                const Icon(
+                  Icons.lightbulb_outline,
+                  color: AppColors.primaryPurple,
+                  size: 20,
                 ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryPurpleLight,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '추천: ${_recommendedSide == 'left' ? '왼쪽' : '오른쪽'}',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.primaryPurple,
-                      fontWeight: FontWeight.w600,
-                    ),
+                const SizedBox(width: AppSpacing.s),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (widget.lastSide != null) ...[
+                        Text(
+                          '최근에 ${widget.lastSide == 'left' ? '왼쪽' : '오른쪽'}에 맞았어요',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.primaryPurple,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '오늘은 ${_recommendedSide == 'left' ? '왼쪽' : '오른쪽'}을 추천해요! ⭐',
+                          style: AppTextStyles.body.copyWith(
+                            color: AppColors.primaryPurple,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ] else ...[
+                        Text(
+                          '처음이시네요! 편한 쪽을 선택해주세요 ⭐',
+                          style: AppTextStyles.body.copyWith(
+                            color: AppColors.primaryPurple,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ],
             ),
-          ],
+          ),
           const SizedBox(height: AppSpacing.xl),
 
           // 저장 버튼
@@ -337,6 +331,7 @@ class _InjectionSiteBottomSheetState extends State<InjectionSiteBottomSheet> {
   Widget _buildSiteCell(InjectionSitePosition position) {
     final isSelected = _selectedPosition == position;
     final isRecommendedSide = position.side == _recommendedSide;
+    final isLastUsedSide = widget.lastSide != null && position.side == widget.lastSide;
 
     return GestureDetector(
       onTap: () => setState(() => _selectedPosition = position),
@@ -346,35 +341,41 @@ class _InjectionSiteBottomSheetState extends State<InjectionSiteBottomSheet> {
         decoration: BoxDecoration(
           color: isSelected
               ? AppColors.primaryPurple
-              : isRecommendedSide
-                  ? AppColors.primaryPurpleLight.withValues(alpha: 0.3)
-                  : AppColors.cardBackground,
+              : isLastUsedSide
+                  ? AppColors.textSecondary.withValues(alpha: 0.15) // 최근 사용 쪽: 음영 처리
+                  : isRecommendedSide
+                      ? AppColors.primaryPurpleLight.withValues(alpha: 0.5)
+                      : AppColors.cardBackground,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected
                 ? AppColors.primaryPurple
                 : isRecommendedSide
-                    ? AppColors.primaryPurple.withValues(alpha: 0.3)
-                    : AppColors.border,
-            width: isSelected ? 2 : 1,
+                    ? AppColors.primaryPurple.withValues(alpha: 0.5)
+                    : isLastUsedSide
+                        ? AppColors.textSecondary.withValues(alpha: 0.3)
+                        : AppColors.border,
+            width: isSelected || isRecommendedSide ? 2 : 1,
           ),
         ),
         child: Center(
           child: isSelected
               ? const Icon(Icons.check, color: Colors.white, size: 20)
-              : Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: isRecommendedSide
-                          ? AppColors.primaryPurple.withValues(alpha: 0.5)
-                          : AppColors.border,
-                      width: 1.5,
-                    ),
-                  ),
-                ),
+              : isRecommendedSide
+                  ? const Icon(Icons.star, color: AppColors.primaryPurple, size: 16) // ⭐ 아이콘 추가
+                  : isLastUsedSide
+                      ? Icon(Icons.history, color: AppColors.textSecondary.withValues(alpha: 0.6), size: 14) // 최근 사용 표시
+                      : Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.border,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
         ),
       ),
     );
@@ -429,12 +430,7 @@ class _FullScreenCelebrationState extends State<_FullScreenCelebration>
     _mainController.forward();
     _confettiController.forward();
 
-    // 2.5초 후 자동으로 닫힘
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) {
-        widget.onComplete();
-      }
-    });
+    // 자동 닫힘 제거 - 탭할 때만 닫힘
   }
 
   @override

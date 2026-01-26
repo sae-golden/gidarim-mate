@@ -34,7 +34,7 @@ class ParsedMedication {
     DateTime? endDate,
     this.isSelected = true,
   }) : startDate = startDate ?? DateTime.now(),
-       endDate = endDate ?? DateTime.now().add(const Duration(days: 14));
+       endDate = endDate ?? DateTime.now(); // 기본값: 오늘 하루만
 
   /// 복용 기간 (일수)
   int get durationDays => endDate.difference(startDate).inDays + 1;
@@ -249,6 +249,7 @@ class VoiceTextParser {
     String? timeText;
     TimeOfDay? time;
     DateTime? endDate;
+    int durationDays = 1; // 기본값: 오늘 하루만
 
     // 약물 종류 감지 및 제거
     for (final entry in _typeKeywords.entries) {
@@ -274,6 +275,13 @@ class VoiceTextParser {
       text = text.replaceAll(timeResult.originalText, ' ').trim();
     }
 
+    // 기간 추출 - 일주일/주/달/일 동안 패턴
+    final durationResult = _extractDuration(text);
+    if (durationResult != null) {
+      durationDays = durationResult.days;
+      text = text.replaceAll(durationResult.originalText, ' ').trim();
+    }
+
     // 기간 추출 (예: "1월 4일까지")
     final dateMatch = RegExp(r'(\d+)월\s*(\d+)일\s*(까지)?').firstMatch(text);
     if (dateMatch != null) {
@@ -296,14 +304,49 @@ class VoiceTextParser {
 
     if (name.isEmpty) return null;
 
+    // endDate가 설정되지 않았으면 durationDays로 계산
+    final startDate = DateTime.now();
+    endDate ??= startDate.add(Duration(days: durationDays - 1));
+
     return ParsedMedication(
       name: name,
       type: type,
       quantity: quantity,
       timeText: timeText,
       time: time,
+      startDate: startDate,
       endDate: endDate,
     );
+  }
+
+  /// 복용 기간 추출
+  static _DurationResult? _extractDuration(String text) {
+    // 일주일, 1주, 1주일
+    final weekMatch = RegExp(r'(일주일|1주일?|한\s*주)\s*(동안)?').firstMatch(text);
+    if (weekMatch != null) {
+      return _DurationResult(days: 7, originalText: weekMatch.group(0)!);
+    }
+
+    // 2주, 2주일, 이주
+    final twoWeekMatch = RegExp(r'(2주일?|이주|두\s*주)\s*(동안)?').firstMatch(text);
+    if (twoWeekMatch != null) {
+      return _DurationResult(days: 14, originalText: twoWeekMatch.group(0)!);
+    }
+
+    // 한달, 1달, 한 달
+    final monthMatch = RegExp(r'(한\s*달|1달)\s*(동안)?').firstMatch(text);
+    if (monthMatch != null) {
+      return _DurationResult(days: 30, originalText: monthMatch.group(0)!);
+    }
+
+    // N일 동안 (숫자 + 일)
+    final daysMatch = RegExp(r'(\d+)\s*일\s*(동안)?').firstMatch(text);
+    if (daysMatch != null) {
+      final days = int.tryParse(daysMatch.group(1)!) ?? 1;
+      return _DurationResult(days: days, originalText: daysMatch.group(0)!);
+    }
+
+    return null;
   }
 
   /// 시간 추출
@@ -373,6 +416,16 @@ class _TimeResult {
   _TimeResult({
     required this.time,
     required this.text,
+    required this.originalText,
+  });
+}
+
+class _DurationResult {
+  final int days;
+  final String originalText;
+
+  _DurationResult({
+    required this.days,
     required this.originalText,
   });
 }

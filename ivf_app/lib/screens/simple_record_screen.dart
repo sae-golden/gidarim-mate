@@ -17,11 +17,14 @@ import '../widgets/ultrasound_bottom_sheet.dart';
 import '../widgets/pregnancy_test_bottom_sheet.dart';
 import '../widgets/condition_bottom_sheet.dart';
 import '../widgets/cycle_edit_bottom_sheet.dart';
+import '../widgets/hospital_visit_bottom_sheet.dart';
 import '../services/blood_test_service.dart';
 
 /// 타임라인 기반 기록 화면
 class SimpleRecordScreen extends StatefulWidget {
-  const SimpleRecordScreen({super.key});
+  final VoidCallback? onRecordChanged;
+
+  const SimpleRecordScreen({super.key, this.onRecordChanged});
 
   @override
   State<SimpleRecordScreen> createState() => _SimpleRecordScreenState();
@@ -30,6 +33,18 @@ class SimpleRecordScreen extends StatefulWidget {
 class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
   List<TreatmentCycle> _allCycles = []; // 모든 사이클 (현재 + 과거)
   Map<String, List<BloodTest>> _bloodTestsByCycle = {}; // 사이클별 피검사
+  // 추가 기록 항목들
+  Map<String, List<PeriodRecord>> _periodRecordsByCycle = {};
+  Map<String, List<UltrasoundRecord>> _ultrasoundRecordsByCycle = {};
+  Map<String, List<PregnancyTestRecord>> _pregnancyTestRecordsByCycle = {};
+  Map<String, List<ConditionRecord>> _conditionRecordsByCycle = {};
+  Map<String, List<HospitalVisitRecord>> _hospitalVisitRecordsByCycle = {};
+  // 사이클 없는 추가 기록들
+  List<PeriodRecord> _orphanPeriodRecords = [];
+  List<UltrasoundRecord> _orphanUltrasoundRecords = [];
+  List<PregnancyTestRecord> _orphanPregnancyTestRecords = [];
+  List<ConditionRecord> _orphanConditionRecords = [];
+  List<HospitalVisitRecord> _orphanHospitalVisitRecords = [];
   bool _isLoading = true;
   bool _hasCycleStarted = false; // 사이클이 명시적으로 생성되었는지
 
@@ -63,10 +78,57 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
       bloodTestsByCycle[cycle.id] = await BloodTestService.getBloodTests(cycle.id);
     }
 
+    // 각 사이클별 추가 기록 항목 로드
+    final periodRecordsByCycle = <String, List<PeriodRecord>>{};
+    final ultrasoundRecordsByCycle = <String, List<UltrasoundRecord>>{};
+    final pregnancyTestRecordsByCycle = <String, List<PregnancyTestRecord>>{};
+    final conditionRecordsByCycle = <String, List<ConditionRecord>>{};
+    final hospitalVisitRecordsByCycle = <String, List<HospitalVisitRecord>>{};
+
+    for (final cycle in allCycles) {
+      periodRecordsByCycle[cycle.id] = await AdditionalRecordService.getPeriodRecordsByCycle(cycle.id);
+      ultrasoundRecordsByCycle[cycle.id] = await AdditionalRecordService.getUltrasoundRecordsByCycle(cycle.id);
+      pregnancyTestRecordsByCycle[cycle.id] = await AdditionalRecordService.getPregnancyTestRecordsByCycle(cycle.id);
+      conditionRecordsByCycle[cycle.id] = await AdditionalRecordService.getConditionRecordsByCycle(cycle.id);
+      hospitalVisitRecordsByCycle[cycle.id] = await AdditionalRecordService.getHospitalVisitRecordsByCycle(cycle.id);
+    }
+
+    // 사이클 없는 추가 기록들 로드
+    // 기존 orphan 조회 + 존재하지 않는 사이클 ID를 가진 기록도 포함
+    final validCycleIds = allCycles.map((c) => c.id).toSet();
+
+    final allPeriodRecords = await AdditionalRecordService.getAllPeriodRecords();
+    final allUltrasoundRecords = await AdditionalRecordService.getAllUltrasoundRecords();
+    final allPregnancyTestRecords = await AdditionalRecordService.getAllPregnancyTestRecords();
+    final allConditionRecords = await AdditionalRecordService.getAllConditionRecords();
+    final allHospitalVisitRecords = await AdditionalRecordService.getAllHospitalVisitRecords();
+
+    // cycleId가 null, 빈 문자열, 또는 존재하지 않는 사이클 ID인 경우 orphan으로 분류
+    final orphanPeriodRecords = allPeriodRecords.where((r) =>
+        r.cycleId == null || r.cycleId!.isEmpty || !validCycleIds.contains(r.cycleId)).toList();
+    final orphanUltrasoundRecords = allUltrasoundRecords.where((r) =>
+        r.cycleId == null || r.cycleId!.isEmpty || !validCycleIds.contains(r.cycleId)).toList();
+    final orphanPregnancyTestRecords = allPregnancyTestRecords.where((r) =>
+        r.cycleId == null || r.cycleId!.isEmpty || !validCycleIds.contains(r.cycleId)).toList();
+    final orphanConditionRecords = allConditionRecords.where((r) =>
+        r.cycleId == null || r.cycleId!.isEmpty || !validCycleIds.contains(r.cycleId)).toList();
+    final orphanHospitalVisitRecords = allHospitalVisitRecords.where((r) =>
+        r.cycleId == null || r.cycleId!.isEmpty || !validCycleIds.contains(r.cycleId)).toList();
+
     if (!mounted) return;
     setState(() {
       _allCycles = allCycles;
       _bloodTestsByCycle = bloodTestsByCycle;
+      _periodRecordsByCycle = periodRecordsByCycle;
+      _ultrasoundRecordsByCycle = ultrasoundRecordsByCycle;
+      _pregnancyTestRecordsByCycle = pregnancyTestRecordsByCycle;
+      _conditionRecordsByCycle = conditionRecordsByCycle;
+      _hospitalVisitRecordsByCycle = hospitalVisitRecordsByCycle;
+      _orphanPeriodRecords = orphanPeriodRecords;
+      _orphanUltrasoundRecords = orphanUltrasoundRecords;
+      _orphanPregnancyTestRecords = orphanPregnancyTestRecords;
+      _orphanConditionRecords = orphanConditionRecords;
+      _orphanHospitalVisitRecords = orphanHospitalVisitRecords;
       _hasCycleStarted = hasCycleStarted;
       _isLoading = false;
     });
@@ -92,10 +154,19 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
     );
   }
 
+  /// 사이클 없는 추가 기록이 있는지 확인
+  bool get _hasOrphanRecords {
+    return _orphanPeriodRecords.isNotEmpty ||
+        _orphanUltrasoundRecords.isNotEmpty ||
+        _orphanPregnancyTestRecords.isNotEmpty ||
+        _orphanConditionRecords.isNotEmpty ||
+        _orphanHospitalVisitRecords.isNotEmpty;
+  }
+
   Widget _buildContent() {
-    // 사이클이 없으면 단계 선택 화면 바로 표시
-    if (!_hasCycleStarted) {
-      return _buildStageSelectionScreen();
+    // 사이클이 없으면 "첫 단계 기록하기" 화면 표시 (단, 사이클 없는 기록이 있으면 보여줌)
+    if (!_hasCycleStarted && !_hasOrphanRecords) {
+      return _buildEmptyFirstScreen();
     }
 
     // 모든 사이클을 한 페이지에서 보여주기
@@ -115,186 +186,117 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
     );
   }
 
-  /// 단계 선택 화면 (시술 선택 화면 제거됨)
-  Widget _buildStageSelectionScreen() {
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.m),
-      child: Column(
-        children: [
-          // 헤더
-          Row(
+  /// 첫 진입 시 빈 화면 (시술 정보 없을 때)
+  Widget _buildEmptyFirstScreen() {
+    return Column(
+      children: [
+        // 헤더
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.m),
+          child: Row(
             children: [
               Text('기록', style: AppTextStyles.h2),
             ],
           ),
-          const SizedBox(height: AppSpacing.l),
+        ),
 
-          // 중앙 콘텐츠 (스크롤 가능)
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: AppSpacing.l),
-                  Text(
-                    '어떤 단계를 기록할까요?',
-                    style: AppTextStyles.h3.copyWith(
-                      fontWeight: FontWeight.w600,
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 안내 텍스트
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: AppSpacing.m),
+                  child: Text(
+                    '💜 차근차근 함께 기록해요',
+                    style: AppTextStyles.caption.copyWith(
+                      color: Colors.grey[500],
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.m),
-                  Text(
-                    '시작하는 단계를 선택해주세요',
-                    style: AppTextStyles.body.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
+                ),
 
-                  // 이벤트 타입 버튼들 (자주 사용하는 것들)
-                  _buildStageButton(
-                    emoji: '💉',
-                    title: '과배란 주사',
-                    subtitle: '난포 자극 호르몬 주사 시작',
-                    onTap: () => _startWithStage(EventType.stimulation),
-                  ),
-                  const SizedBox(height: AppSpacing.m),
-                  _buildStageButton(
-                    emoji: '🥚',
-                    title: '난자 채취',
-                    subtitle: '채취 일정 기록',
-                    onTap: () => _startWithStage(EventType.retrieval),
-                  ),
-                  const SizedBox(height: AppSpacing.m),
-                  _buildStageButton(
-                    emoji: '🌱',
-                    title: '배아 이식',
-                    subtitle: '이식 일정 기록',
-                    onTap: () => _startWithStage(EventType.transfer),
-                  ),
-                  const SizedBox(height: AppSpacing.m),
-                  _buildStageButton(
-                    emoji: '📊',
-                    title: '피검사',
-                    subtitle: 'E2, P4, FSH, LH 등 기록',
-                    onTap: () => _startWithBloodTest(),
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-
-                  // 새 사이클 시작 버튼
-                  TextButton.icon(
-                    onPressed: _startNewCycleFromEmpty,
-                    icon: const Icon(Icons.add_circle_outline, size: 18),
-                    label: const Text('새로운 시술 사이클 시작'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primaryPurple,
+                // 첫 단계 기록하기 버튼 (타임라인 노드 스타일)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 타임라인 노드 (빈 원)
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFFE9D5FF),
+                          width: 2,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.l),
-                ],
-              ),
+                    const SizedBox(width: AppSpacing.xs),
+                    // 구분선
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Container(
+                        width: 12,
+                        height: 2,
+                        color: const Color(0xFFE9D5FF),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    // 첫 단계 기록하기 버튼
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _showFirstCycleSetup,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.m,
+                            vertical: AppSpacing.s,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryPurple,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '첫 단계 기록하기',
+                                style: AppTextStyles.body.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const Icon(
+                                Icons.add,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  /// 단계 선택 버튼
-  Widget _buildStageButton({
-    required String emoji,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(AppSpacing.m),
-        decoration: BoxDecoration(
-          color: AppColors.cardBackground,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
         ),
-        child: Row(
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 28)),
-            const SizedBox(width: AppSpacing.m),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: AppTextStyles.body.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.chevron_right,
-              color: AppColors.textSecondary,
-            ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 
-  /// 단계 선택 시 사이클 자동 생성 후 이벤트 추가
-  Future<void> _startWithStage(EventType eventType) async {
-    // 기본 IVF 사이클 자동 생성
-    await SimpleTreatmentService.createDefaultCycle();
-
-    if (!mounted) return;
-
-    // 이벤트 편집 바텀시트 표시
-    final newEvent = await EventEditBottomSheet.showForNew(
+  /// 첫 시술 정보 설정 바텀시트 표시
+  Future<void> _showFirstCycleSetup() async {
+    final newCycle = await NewCycleBottomSheet.show(
       context,
-      eventType: eventType,
+      isFirstCycle: true,
     );
-
-    if (newEvent != null) {
-      await SimpleTreatmentService.addEvent(newEvent);
-    }
-
-    await _loadData();
-  }
-
-  /// 피검사로 시작
-  Future<void> _startWithBloodTest() async {
-    // 기본 IVF 사이클 자동 생성
-    await SimpleTreatmentService.createDefaultCycle();
-    await _loadData();
-
-    final currentCycle = _currentCycle;
-    if (currentCycle == null || !mounted) return;
-
-    final newTest = await BloodTestBottomSheet.showForNew(
-      context,
-      cycleId: currentCycle.id,
-    );
-
-    if (newTest != null) {
-      await _loadData();
-    }
-  }
-
-  /// 빈 상태에서 새 사이클 시작
-  Future<void> _startNewCycleFromEmpty() async {
-    final newCycle = await NewCycleBottomSheet.show(context);
 
     if (newCycle != null) {
+      widget.onRecordChanged?.call();
       await _loadData();
 
       if (!mounted) return;
@@ -309,7 +311,7 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${newCycle.cycleNumber}차 $typeText$optionText 시도를 시작합니다!'),
+          content: Text('${newCycle.cycleNumber}차 $typeText$optionText 시작!'),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -320,22 +322,203 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
 
   /// 모든 사이클 타임라인 (한 페이지 스크롤)
   Widget _buildAllCyclesTimeline() {
+    // 사이클이 없고 사이클 없는 기록만 있는 경우
+    if (_allCycles.isEmpty || (!_hasCycleStarted && _hasOrphanRecords)) {
+      return ListView(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
+        children: [
+          // 사이클 없는 기록들 표시
+          if (_hasOrphanRecords) _buildOrphanRecordsTimeline(),
+          // 첫 사이클 생성 버튼
+          if (!_hasCycleStarted) ...[
+            const SizedBox(height: AppSpacing.l),
+            _buildStartCycleButton(),
+          ],
+        ],
+      );
+    }
+
+    // 사이클 개수 + 사이클 없는 기록 섹션 (있는 경우)
+    final totalItems = _allCycles.length + (_hasOrphanRecords ? 1 : 0);
+
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.m),
-      itemCount: _allCycles.length,
+      itemCount: totalItems,
       separatorBuilder: (context, index) => const Divider(height: 32, thickness: 1),
       itemBuilder: (context, index) {
+        // 마지막 아이템이 사이클 없는 기록 섹션
+        if (_hasOrphanRecords && index == totalItems - 1) {
+          return _buildOrphanRecordsTimeline();
+        }
+
         final cycle = _allCycles[index];
         // 진행중인 사이클은 _currentCycle과 동일한 경우에만 (가장 최신의 결과 없는 사이클)
         final isCurrentCycle = _currentCycle?.id == cycle.id;
         final bloodTests = _bloodTestsByCycle[cycle.id] ?? [];
+        final periodRecords = _periodRecordsByCycle[cycle.id] ?? [];
+        final ultrasoundRecords = _ultrasoundRecordsByCycle[cycle.id] ?? [];
+        final pregnancyTestRecords = _pregnancyTestRecordsByCycle[cycle.id] ?? [];
+        final conditionRecords = _conditionRecordsByCycle[cycle.id] ?? [];
+        final hospitalVisitRecords = _hospitalVisitRecordsByCycle[cycle.id] ?? [];
 
         return _buildCycleTimeline(
           cycle: cycle,
           bloodTests: bloodTests,
+          periodRecords: periodRecords,
+          ultrasoundRecords: ultrasoundRecords,
+          pregnancyTestRecords: pregnancyTestRecords,
+          conditionRecords: conditionRecords,
+          hospitalVisitRecords: hospitalVisitRecords,
           isCurrentCycle: isCurrentCycle,
         );
       },
+    );
+  }
+
+  /// 첫 사이클 생성 버튼
+  Widget _buildStartCycleButton() {
+    return GestureDetector(
+      onTap: _showFirstCycleSetup,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.m),
+        decoration: BoxDecoration(
+          color: AppColors.primaryPurpleLight,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.primaryPurple.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.primaryPurple,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.add, color: Colors.white),
+            ),
+            const SizedBox(width: AppSpacing.m),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '시술 시작하기',
+                    style: AppTextStyles.body.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primaryPurple,
+                    ),
+                  ),
+                  Text(
+                    '시술 정보를 입력하고 기록을 시작해요',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: AppColors.primaryPurple),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 사이클 없는 기록들 타임라인
+  Widget _buildOrphanRecordsTimeline() {
+    // 모든 사이클 없는 기록들을 날짜순으로 병합
+    final allOrphanRecords = <dynamic>[
+      ..._orphanPeriodRecords,
+      ..._orphanUltrasoundRecords,
+      ..._orphanPregnancyTestRecords,
+      ..._orphanConditionRecords,
+      ..._orphanHospitalVisitRecords,
+    ];
+
+    // 날짜순 정렬 (최신순)
+    allOrphanRecords.sort((a, b) {
+      final dateA = _getItemDate(a);
+      final dateB = _getItemDate(b);
+      return dateB.compareTo(dateA);
+    });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 섹션 헤더
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.m),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.s,
+                  vertical: AppSpacing.xxs,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.textSecondary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '기타 기록',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                '시술에 연결되지 않은 기록',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textSecondary.withOpacity(0.7),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // 기록들 표시
+        ...allOrphanRecords.map((item) {
+          if (item is PeriodRecord) {
+            return TimelineAdditionalRecordWidget(
+              recordType: RecordType.period,
+              date: item.date,
+              summary: item.memo ?? '생리 시작',
+              onTap: () => _editPeriodRecord(item),
+            );
+          } else if (item is UltrasoundRecord) {
+            return TimelineAdditionalRecordWidget(
+              recordType: RecordType.ultrasound,
+              date: item.date,
+              summary: item.summaryText,
+              onTap: () => _editUltrasoundRecord(item),
+            );
+          } else if (item is PregnancyTestRecord) {
+            return TimelineAdditionalRecordWidget(
+              recordType: RecordType.pregnancyTest,
+              date: item.date,
+              summary: item.summaryText,
+              onTap: () => _editPregnancyTestRecord(item),
+            );
+          } else if (item is ConditionRecord) {
+            return TimelineAdditionalRecordWidget(
+              recordType: RecordType.condition,
+              date: item.date,
+              summary: item.summaryText,
+              onTap: () => _editConditionRecord(item),
+            );
+          } else if (item is HospitalVisitRecord) {
+            return TimelineAdditionalRecordWidget(
+              recordType: RecordType.hospitalVisit,
+              date: item.date,
+              summary: item.summaryText,
+              onTap: () => _editHospitalVisitRecord(item),
+            );
+          }
+          return const SizedBox.shrink();
+        }),
+      ],
     );
   }
 
@@ -343,15 +526,33 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
   Widget _buildCycleTimeline({
     required TreatmentCycle cycle,
     required List<BloodTest> bloodTests,
+    required List<PeriodRecord> periodRecords,
+    required List<UltrasoundRecord> ultrasoundRecords,
+    required List<PregnancyTestRecord> pregnancyTestRecords,
+    required List<ConditionRecord> conditionRecords,
+    required List<HospitalVisitRecord> hospitalVisitRecords,
     required bool isCurrentCycle,
   }) {
     final sortedEvents = cycle.sortedEvents;
     final hasEvents = sortedEvents.isNotEmpty;
     final hasBloodTests = bloodTests.isNotEmpty;
-    final hasAnyRecords = hasEvents || hasBloodTests;
+    final hasAdditionalRecords = periodRecords.isNotEmpty ||
+        ultrasoundRecords.isNotEmpty ||
+        pregnancyTestRecords.isNotEmpty ||
+        conditionRecords.isNotEmpty ||
+        hospitalVisitRecords.isNotEmpty;
+    final hasAnyRecords = hasEvents || hasBloodTests || hasAdditionalRecords;
 
-    // 이벤트와 피검사를 날짜순으로 병합
-    final timelineItems = _buildMergedTimeline(sortedEvents, bloodTests);
+    // 이벤트와 피검사, 추가 기록을 날짜순으로 병합
+    final timelineItems = _buildMergedTimeline(
+      sortedEvents,
+      bloodTests,
+      periodRecords: periodRecords,
+      ultrasoundRecords: ultrasoundRecords,
+      pregnancyTestRecords: pregnancyTestRecords,
+      conditionRecords: conditionRecords,
+      hospitalVisitRecords: hospitalVisitRecords,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,6 +589,41 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
             return TimelineBloodTestWidget(
               bloodTest: item,
               onTap: isCurrentCycle ? () => _editBloodTest(item) : null,
+            );
+          } else if (item is PeriodRecord) {
+            return TimelineAdditionalRecordWidget(
+              recordType: RecordType.period,
+              date: item.date,
+              summary: item.memo ?? '생리 시작',
+              onTap: isCurrentCycle ? () => _editPeriodRecord(item) : null,
+            );
+          } else if (item is UltrasoundRecord) {
+            return TimelineAdditionalRecordWidget(
+              recordType: RecordType.ultrasound,
+              date: item.date,
+              summary: item.summaryText,
+              onTap: isCurrentCycle ? () => _editUltrasoundRecord(item) : null,
+            );
+          } else if (item is PregnancyTestRecord) {
+            return TimelineAdditionalRecordWidget(
+              recordType: RecordType.pregnancyTest,
+              date: item.date,
+              summary: item.summaryText,
+              onTap: isCurrentCycle ? () => _editPregnancyTestRecord(item) : null,
+            );
+          } else if (item is ConditionRecord) {
+            return TimelineAdditionalRecordWidget(
+              recordType: RecordType.condition,
+              date: item.date,
+              summary: item.summaryText,
+              onTap: isCurrentCycle ? () => _editConditionRecord(item) : null,
+            );
+          } else if (item is HospitalVisitRecord) {
+            return TimelineAdditionalRecordWidget(
+              recordType: RecordType.hospitalVisit,
+              date: item.date,
+              summary: item.summaryText,
+              onTap: isCurrentCycle ? () => _editHospitalVisitRecord(item) : null,
             );
           }
           return const SizedBox.shrink();
@@ -504,29 +740,58 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
     );
   }
 
-  /// 이벤트와 피검사를 날짜순으로 병합
+  /// 이벤트와 피검사, 추가 기록을 날짜순으로 병합
   List<dynamic> _buildMergedTimeline(
     List<TreatmentEvent> events,
-    List<BloodTest> bloodTests,
-  ) {
-    final items = <dynamic>[...events, ...bloodTests];
+    List<BloodTest> bloodTests, {
+    List<PeriodRecord> periodRecords = const [],
+    List<UltrasoundRecord> ultrasoundRecords = const [],
+    List<PregnancyTestRecord> pregnancyTestRecords = const [],
+    List<ConditionRecord> conditionRecords = const [],
+    List<HospitalVisitRecord> hospitalVisitRecords = const [],
+  }) {
+    final items = <dynamic>[
+      ...events,
+      ...bloodTests,
+      ...periodRecords,
+      ...ultrasoundRecords,
+      ...pregnancyTestRecords,
+      ...conditionRecords,
+      ...hospitalVisitRecords,
+    ];
     items.sort((a, b) {
-      final dateA = a is TreatmentEvent ? a.date : (a as BloodTest).date;
-      final dateB = b is TreatmentEvent ? b.date : (b as BloodTest).date;
+      final dateA = _getItemDate(a);
+      final dateB = _getItemDate(b);
       return dateA.compareTo(dateB);
     });
     return items;
   }
 
+  /// 타임라인 아이템의 날짜 추출
+  DateTime _getItemDate(dynamic item) {
+    if (item is TreatmentEvent) return item.date;
+    if (item is BloodTest) return item.date;
+    if (item is PeriodRecord) return item.date;
+    if (item is UltrasoundRecord) return item.date;
+    if (item is PregnancyTestRecord) return item.date;
+    if (item is ConditionRecord) return item.date;
+    if (item is HospitalVisitRecord) return item.date;
+    return DateTime.now();
+  }
+
   /// 빈 상태 메시지 (안내 텍스트만, 블록 없음)
   Widget _buildEmptyMessage() {
     return Padding(
-      padding: const EdgeInsets.only(left: 4, top: AppSpacing.xs, bottom: AppSpacing.s),
-      child: Text(
-        '차근차근 함께 기록해요',
-        style: AppTextStyles.caption.copyWith(
-          color: AppColors.textDisabled,
-        ),
+      padding: const EdgeInsets.only(left: 56, top: AppSpacing.xs, bottom: AppSpacing.s),
+      child: Row(
+        children: [
+          Text(
+            '💜 차근차근 함께 기록해요',
+            style: AppTextStyles.caption.copyWith(
+              color: Colors.grey[500],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -632,6 +897,11 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
       return;
     }
 
+    if (result == 'hospitalVisit') {
+      await _addHospitalVisitRecord();
+      return;
+    }
+
     if (result is EventType) {
       if (!mounted) return;
       final newEvent = await EventEditBottomSheet.showForNew(
@@ -641,6 +911,7 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
 
       if (newEvent != null) {
         await SimpleTreatmentService.addEvent(newEvent);
+        widget.onRecordChanged?.call();
         await _loadData(); // 데이터 새로고침
       }
     }
@@ -657,6 +928,7 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
     );
 
     if (newTest != null) {
+      widget.onRecordChanged?.call();
       await _loadData(); // 데이터 새로고침
 
       if (!mounted) return;
@@ -681,6 +953,7 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
 
     if (result == null) return;
 
+    widget.onRecordChanged?.call();
     await _loadData(); // 데이터 새로고침
 
     if (result == 'delete' && mounted) {
@@ -707,6 +980,7 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
 
     if (result == 'delete') {
       await SimpleTreatmentService.removeEvent(event.id);
+      widget.onRecordChanged?.call();
       await _loadData(); // 데이터 새로고침
 
       if (mounted) {
@@ -722,6 +996,7 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
       }
     } else if (result is TreatmentEvent) {
       await SimpleTreatmentService.updateEvent(result);
+      widget.onRecordChanged?.call();
       await _loadData(); // 데이터 새로고침
     }
   }
@@ -737,9 +1012,11 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
 
     if (result == 'clear') {
       await SimpleTreatmentService.clearCycleResult();
+      widget.onRecordChanged?.call();
       await _loadData(); // 데이터 새로고침
     } else if (result is CycleResult) {
       await SimpleTreatmentService.setCycleResult(result);
+      widget.onRecordChanged?.call();
       await _loadData(); // 데이터 새로고침
     }
   }
@@ -754,6 +1031,7 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
     final newCycle = await NewCycleBottomSheet.show(context);
 
     if (newCycle != null) {
+      widget.onRecordChanged?.call();
       await _loadData(); // 데이터 새로고침
 
       if (!mounted) return;
@@ -794,6 +1072,8 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
 
     if (newRecord != null) {
       await AdditionalRecordService.addPeriodRecord(newRecord);
+      widget.onRecordChanged?.call();
+      await _loadData(); // 화면 데이터 새로고침
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -817,6 +1097,8 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
 
     if (newRecord != null) {
       await AdditionalRecordService.addUltrasoundRecord(newRecord);
+      widget.onRecordChanged?.call();
+      await _loadData(); // 화면 데이터 새로고침
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -840,6 +1122,8 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
 
     if (newRecord != null) {
       await AdditionalRecordService.addPregnancyTestRecord(newRecord);
+      widget.onRecordChanged?.call();
+      await _loadData(); // 화면 데이터 새로고침
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -863,6 +1147,8 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
 
     if (newRecord != null) {
       await AdditionalRecordService.addConditionRecord(newRecord);
+      widget.onRecordChanged?.call();
+      await _loadData(); // 화면 데이터 새로고침
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -898,6 +1184,7 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
     // 수정된 사이클
     if (result is TreatmentCycle) {
       await SimpleTreatmentService.updateCycle(result);
+      widget.onRecordChanged?.call();
       await _loadData();
 
       if (!mounted) return;
@@ -919,6 +1206,7 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
 
     // 사이클 삭제
     await SimpleTreatmentService.deleteCycle(cycle.id);
+    widget.onRecordChanged?.call();
     await _loadData();
 
     if (!mounted) return;
@@ -930,6 +1218,190 @@ class _SimpleRecordScreenState extends State<SimpleRecordScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
+  }
+
+  // ============================================================
+  // 추가 기록 항목 편집
+  // ============================================================
+
+  /// 생리 시작일 기록 편집
+  Future<void> _editPeriodRecord(PeriodRecord record) async {
+    final result = await PeriodBottomSheet.showForEdit(
+      context,
+      record: record,
+    );
+
+    if (result == null) return;
+
+    if (result == 'delete') {
+      await AdditionalRecordService.deletePeriodRecord(record.id);
+      widget.onRecordChanged?.call();
+      await _loadData();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('생리 시작일 기록이 삭제되었습니다'),
+            backgroundColor: AppColors.warning,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } else if (result is PeriodRecord) {
+      await AdditionalRecordService.updatePeriodRecord(result);
+      widget.onRecordChanged?.call();
+      await _loadData();
+    }
+  }
+
+  /// 초음파 검사 기록 편집
+  Future<void> _editUltrasoundRecord(UltrasoundRecord record) async {
+    final result = await UltrasoundBottomSheet.showForEdit(
+      context,
+      record: record,
+    );
+
+    if (result == null) return;
+
+    if (result == 'delete') {
+      await AdditionalRecordService.deleteUltrasoundRecord(record.id);
+      widget.onRecordChanged?.call();
+      await _loadData();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('초음파 검사 기록이 삭제되었습니다'),
+            backgroundColor: AppColors.warning,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } else if (result is UltrasoundRecord) {
+      await AdditionalRecordService.updateUltrasoundRecord(result);
+      widget.onRecordChanged?.call();
+      await _loadData();
+    }
+  }
+
+  /// 임신 테스트 기록 편집
+  Future<void> _editPregnancyTestRecord(PregnancyTestRecord record) async {
+    final result = await PregnancyTestBottomSheet.showForEdit(
+      context,
+      record: record,
+    );
+
+    if (result == null) return;
+
+    if (result == 'delete') {
+      await AdditionalRecordService.deletePregnancyTestRecord(record.id);
+      widget.onRecordChanged?.call();
+      await _loadData();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('임신 테스트 기록이 삭제되었습니다'),
+            backgroundColor: AppColors.warning,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } else if (result is PregnancyTestRecord) {
+      await AdditionalRecordService.updatePregnancyTestRecord(result);
+      widget.onRecordChanged?.call();
+      await _loadData();
+    }
+  }
+
+  /// 몸 상태 기록 편집
+  Future<void> _editConditionRecord(ConditionRecord record) async {
+    final result = await ConditionBottomSheet.showForEdit(
+      context,
+      record: record,
+    );
+
+    if (result == null) return;
+
+    if (result == 'delete') {
+      await AdditionalRecordService.deleteConditionRecord(record.id);
+      widget.onRecordChanged?.call();
+      await _loadData();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('몸 상태 기록이 삭제되었습니다'),
+            backgroundColor: AppColors.warning,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } else if (result is ConditionRecord) {
+      await AdditionalRecordService.updateConditionRecord(result);
+      widget.onRecordChanged?.call();
+      await _loadData();
+    }
+  }
+
+  /// 병원 예약 기록 추가
+  Future<void> _addHospitalVisitRecord() async {
+    final currentCycle = _currentCycle;
+    final newRecord = await HospitalVisitBottomSheet.showForNew(
+      context,
+      cycleId: currentCycle?.id,
+    );
+
+    if (newRecord != null) {
+      await AdditionalRecordService.addHospitalVisitRecord(newRecord);
+      widget.onRecordChanged?.call();
+      await _loadData(); // 화면 데이터 새로고침
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('병원 예약이 기록되었습니다'),
+          backgroundColor: RecordType.hospitalVisit.color,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
+  /// 병원 예약 기록 편집
+  Future<void> _editHospitalVisitRecord(HospitalVisitRecord record) async {
+    final result = await HospitalVisitBottomSheet.showForEdit(
+      context,
+      record: record,
+    );
+
+    if (result == null) return;
+
+    if (result == 'delete') {
+      await AdditionalRecordService.deleteHospitalVisitRecord(record.id);
+      widget.onRecordChanged?.call();
+      await _loadData();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('병원 예약 기록이 삭제되었습니다'),
+            backgroundColor: AppColors.warning,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } else if (result is HospitalVisitRecord) {
+      await AdditionalRecordService.updateHospitalVisitRecord(result);
+      widget.onRecordChanged?.call();
+      await _loadData();
+    }
   }
 
 }

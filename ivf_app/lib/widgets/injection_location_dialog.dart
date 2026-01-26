@@ -128,7 +128,7 @@ class _InjectionLocationDialogState extends State<InjectionLocationDialog> {
 
             // 추천 안내
             Container(
-              padding: const EdgeInsets.all(AppSpacing.s),
+              padding: const EdgeInsets.all(AppSpacing.m),
               decoration: BoxDecoration(
                 color: AppColors.primaryPurpleLight,
                 borderRadius: BorderRadius.circular(12),
@@ -138,23 +138,26 @@ class _InjectionLocationDialogState extends State<InjectionLocationDialog> {
                   const Icon(
                     Icons.lightbulb_outline,
                     color: AppColors.primaryPurple,
-                    size: 20,
+                    size: 24,
                   ),
-                  const SizedBox(width: AppSpacing.xs),
+                  const SizedBox(width: AppSpacing.s),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (widget.lastLocation != null)
                           Text(
-                            '어제: ${_getLocationName(widget.lastLocation!)}',
+                            '최근에 ${_getLocationName(widget.lastLocation!)}에 맞았어요',
                             style: AppTextStyles.caption.copyWith(
                               color: AppColors.primaryPurple,
                             ),
                           ),
+                        const SizedBox(height: 2),
                         Text(
-                          '추천: $_recommendedSideText (${_getLocationName(_recommendedLocation)})',
-                          style: AppTextStyles.caption.copyWith(
+                          widget.lastLocation != null
+                              ? '오늘은 $_recommendedSideText을 추천해요! ⭐'
+                              : '처음이시네요! $_recommendedSideText을 추천해요 ⭐',
+                          style: AppTextStyles.body.copyWith(
                             color: AppColors.primaryPurple,
                             fontWeight: FontWeight.w600,
                           ),

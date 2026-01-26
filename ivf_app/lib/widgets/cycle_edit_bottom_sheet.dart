@@ -543,9 +543,14 @@ class _CycleEditBottomSheetState extends State<CycleEditBottomSheet> {
   }
 
   Future<void> _showDeleteConfirm() async {
+    final eventCount = widget.cycle.events.length;
+    final message = eventCount > 0
+        ? '${widget.cycle.cycleNumber}차 ${widget.cycle.type.name}을 삭제하시겠어요?\n연결된 기록 ${eventCount}개도 함께 삭제됩니다.'
+        : '${widget.cycle.cycleNumber}차 ${widget.cycle.type.name}을 삭제하시겠어요?';
+
     final confirmed = await ConfirmBottomSheet.show(
       context,
-      message: '${widget.cycle.cycleNumber}차 시술 기록을 삭제할까요?\n\n이 주기에 포함된 모든 이벤트와 기록이 함께 삭제됩니다.',
+      message: message,
       confirmText: '삭제',
       cancelText: '취소',
     );

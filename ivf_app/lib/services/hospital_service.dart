@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/hospital.dart';
-import 'cloud_storage_service.dart';
 
 /// 병원 검색 서비스
 class HospitalService {
@@ -103,30 +102,14 @@ class HospitalService {
     }
   }
 
-  /// 사용자 병원 정보 저장 (로컬 + 클라우드)
+  /// 사용자 병원 정보 저장 (로컬)
   static Future<void> saveUserHospitalInfo(UserHospitalInfo info, {bool syncToCloud = true}) async {
     try {
-      // 1. 로컬 저장
+      // 로컬 저장
       final prefs = await SharedPreferences.getInstance();
       final jsonStr = json.encode(info.toJson());
       await prefs.setString(_userHospitalKey, jsonStr);
-      debugPrint('✅ 병원 정보 로컬 저장 완료');
-
-      // 2. 클라우드 저장 (로그인된 경우)
-      if (syncToCloud && CloudStorageService.isLoggedIn) {
-        final hospitalData = {
-          'name': info.hospital?.name,
-          'address': info.hospital?.address,
-          'phone': info.hospital?.phone,
-          'sidoName': info.hospital?.sidoName,
-          'sgguName': info.hospital?.sgguName,
-          'ykiho': info.hospital?.ykiho,
-          'doctorName': info.doctorName,
-          'memo': info.memo,
-        };
-        await CloudStorageService.saveHospitalInfo(hospitalData);
-        debugPrint('☁️ 병원 정보 클라우드 저장 완료');
-      }
+      debugPrint('✅ 병원 정보 저장 완료');
     } catch (e) {
       debugPrint('Save Hospital Info Error: $e');
     }

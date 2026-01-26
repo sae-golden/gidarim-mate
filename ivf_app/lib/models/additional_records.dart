@@ -3,7 +3,7 @@
 
 import 'package:flutter/material.dart';
 
-/// 기록 항목 타입 (전체 11개)
+/// 기록 항목 타입 (전체 12개)
 enum RecordType {
   // 주기 관리
   period,        // 생리 시작일
@@ -20,6 +20,7 @@ enum RecordType {
   bloodTest,     // 피검사
   ultrasound,    // 초음파 검사
   pregnancyTest, // 임신 테스트
+  hospitalVisit, // 병원 예약
 
   // 일상 기록
   condition,     // 몸 상태
@@ -39,6 +40,7 @@ extension RecordTypeExtension on RecordType {
       case RecordType.bloodTest: return '피검사';
       case RecordType.ultrasound: return '초음파 검사';
       case RecordType.pregnancyTest: return '임신 테스트';
+      case RecordType.hospitalVisit: return '병원 예약';
       case RecordType.condition: return '몸 상태';
     }
   }
@@ -56,6 +58,7 @@ extension RecordTypeExtension on RecordType {
       case RecordType.bloodTest: return '피검사 했어요';
       case RecordType.ultrasound: return '초음파 봤어요';
       case RecordType.pregnancyTest: return '임신 테스트 했어요';
+      case RecordType.hospitalVisit: return '병원 예약했어요';
       case RecordType.condition: return '오늘 몸 상태 기록하기';
     }
   }
@@ -72,6 +75,7 @@ extension RecordTypeExtension on RecordType {
       case RecordType.bloodTest: return '📋';
       case RecordType.ultrasound: return '🔍';
       case RecordType.pregnancyTest: return '🤞';
+      case RecordType.hospitalVisit: return '🏥';
       case RecordType.condition: return '📝';
     }
   }
@@ -88,6 +92,7 @@ extension RecordTypeExtension on RecordType {
       case RecordType.bloodTest: return const Color(0xFF4A90D9);      // 파랑
       case RecordType.ultrasound: return const Color(0xFF1ABC9C);     // 청록
       case RecordType.pregnancyTest: return const Color(0xFFBB8FCE);  // 연보라
+      case RecordType.hospitalVisit: return const Color(0xFF3498DB);  // 진한 파랑
       case RecordType.condition: return const Color(0xFF95A5A6);      // 회색
     }
   }
@@ -107,6 +112,7 @@ extension RecordTypeExtension on RecordType {
       case RecordType.bloodTest:
       case RecordType.ultrasound:
       case RecordType.pregnancyTest:
+      case RecordType.hospitalVisit:
         return '검사 기록';
       case RecordType.condition:
         return '일상 기록';
@@ -647,6 +653,148 @@ class ConditionRecord {
       date: date,
       symptoms: symptoms,
       memo: memo,
+    );
+  }
+}
+
+// ============================================================
+// 병원 예약 기록
+// ============================================================
+
+/// 병원 예약 기록
+class HospitalVisitRecord {
+  final String id;
+  final String? cycleId;
+  final DateTime date;           // 예약 날짜
+  final TimeOfDay? time;         // 예약 시간
+  final String? memo;            // 메모 (예: 초음파 검사, 채취 상담)
+  final bool enableReminder;     // 알림 설정 여부
+  final int? reminderMinutesBefore; // 알림 시간 (몇 분 전)
+  final DateTime createdAt;
+
+  HospitalVisitRecord({
+    required this.id,
+    this.cycleId,
+    required this.date,
+    this.time,
+    this.memo,
+    this.enableReminder = false,
+    this.reminderMinutesBefore,
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
+
+  /// 표시용 날짜 (MM.DD)
+  String get dateText {
+    return '${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
+  }
+
+  /// 전체 날짜 (YYYY.MM.DD)
+  String get fullDateText {
+    return '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
+  }
+
+  /// 시간 텍스트 (오전/오후 H:MM)
+  String? get timeText {
+    if (time == null) return null;
+    final hour = time!.hour;
+    final minute = time!.minute;
+    final period = hour < 12 ? '오전' : '오후';
+    final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    return '$period $displayHour:${minute.toString().padLeft(2, '0')}';
+  }
+
+  /// 예약 일시 (DateTime)
+  DateTime? get appointmentDateTime {
+    if (time == null) return null;
+    return DateTime(date.year, date.month, date.day, time!.hour, time!.minute);
+  }
+
+  /// 타임라인 요약 텍스트
+  String get summaryText {
+    final parts = <String>['병원 예약'];
+    if (timeText != null) parts.add(timeText!);
+    if (memo != null && memo!.isNotEmpty) parts.add(memo!);
+    return parts.join(' · ');
+  }
+
+  HospitalVisitRecord copyWith({
+    String? id,
+    String? cycleId,
+    DateTime? date,
+    TimeOfDay? time,
+    String? memo,
+    bool? enableReminder,
+    int? reminderMinutesBefore,
+    DateTime? createdAt,
+    bool clearTime = false,
+    bool clearMemo = false,
+    bool clearReminder = false,
+  }) {
+    return HospitalVisitRecord(
+      id: id ?? this.id,
+      cycleId: cycleId ?? this.cycleId,
+      date: date ?? this.date,
+      time: clearTime ? null : (time ?? this.time),
+      memo: clearMemo ? null : (memo ?? this.memo),
+      enableReminder: clearReminder ? false : (enableReminder ?? this.enableReminder),
+      reminderMinutesBefore: clearReminder ? null : (reminderMinutesBefore ?? this.reminderMinutesBefore),
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'cycleId': cycleId,
+      'date': date.toIso8601String(),
+      'timeHour': time?.hour,
+      'timeMinute': time?.minute,
+      'memo': memo,
+      'enableReminder': enableReminder,
+      'reminderMinutesBefore': reminderMinutesBefore,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+
+  factory HospitalVisitRecord.fromJson(Map<String, dynamic> json) {
+    TimeOfDay? time;
+    if (json['timeHour'] != null && json['timeMinute'] != null) {
+      time = TimeOfDay(
+        hour: json['timeHour'] as int,
+        minute: json['timeMinute'] as int,
+      );
+    }
+
+    return HospitalVisitRecord(
+      id: json['id'] as String,
+      cycleId: json['cycleId'] as String?,
+      date: DateTime.parse(json['date'] as String),
+      time: time,
+      memo: json['memo'] as String?,
+      enableReminder: json['enableReminder'] as bool? ?? false,
+      reminderMinutesBefore: json['reminderMinutesBefore'] as int?,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
+    );
+  }
+
+  factory HospitalVisitRecord.create({
+    String? cycleId,
+    required DateTime date,
+    TimeOfDay? time,
+    String? memo,
+    bool enableReminder = false,
+    int? reminderMinutesBefore,
+  }) {
+    return HospitalVisitRecord(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      cycleId: cycleId,
+      date: date,
+      time: time,
+      memo: memo,
+      enableReminder: enableReminder,
+      reminderMinutesBefore: reminderMinutesBefore,
     );
   }
 }

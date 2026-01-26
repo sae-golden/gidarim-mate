@@ -5,7 +5,11 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
+import android.view.KeyEvent
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -16,8 +20,24 @@ class MainActivity : FlutterActivity() {
     private var wakeLock: PowerManager.WakeLock? = null
     private val TAG = "IVFMate_MainActivity"
 
+    // 진동 관련
+    private var vibrator: Vibrator? = null
+    private var isVibrating = false
+
+    // 볼륨 버튼 콜백
+    private var volumeButtonCallback: MethodChannel.Result? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // Vibrator 초기화
+        vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            vibratorManager.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -47,11 +67,89 @@ class MainActivity : FlutterActivity() {
                     )
                     result.success(null)
                 }
+                "startVibration" -> {
+                    Log.d(TAG, "startVibration 호출됨")
+                    startContinuousVibration()
+                    result.success(null)
+                }
+                "stopVibration" -> {
+                    Log.d(TAG, "stopVibration 호출됨")
+                    stopVibration()
+                    result.success(null)
+                }
+                "listenVolumeButton" -> {
+                    Log.d(TAG, "listenVolumeButton 호출됨")
+                    volumeButtonCallback = result
+                    // result는 나중에 볼륨 버튼 눌릴 때 반환
+                }
+                "cancelVolumeButtonListener" -> {
+                    Log.d(TAG, "cancelVolumeButtonListener 호출됨")
+                    volumeButtonCallback = null
+                    result.success(null)
+                }
                 else -> {
                     result.notImplemented()
                 }
             }
         }
+    }
+
+    /**
+     * 연속 진동 시작 (오디오 포커스 없이)
+     * 패턴: 500ms 진동, 500ms 대기, 반복
+     */
+    private fun startContinuousVibration() {
+        if (isVibrating) return
+        isVibrating = true
+
+        val pattern = longArrayOf(0, 500, 500) // 대기, 진동, 대기
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val effect = VibrationEffect.createWaveform(pattern, 1) // 인덱스 1부터 반복
+            vibrator?.vibrate(effect)
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator?.vibrate(pattern, 1)
+        }
+        Log.d(TAG, "연속 진동 시작됨")
+    }
+
+    /**
+     * 진동 중지
+     */
+    private fun stopVibration() {
+        vibrator?.cancel()
+        isVibrating = false
+        Log.d(TAG, "진동 중지됨")
+    }
+
+    /**
+     * 볼륨 버튼 이벤트 감지
+     * 볼륨 버튼이 눌리면 즉시 진동을 중지하고 Flutter에 알림
+     */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            val wasVibrating = isVibrating
+            Log.d(TAG, "볼륨 버튼 감지: $keyCode, wasVibrating=$wasVibrating")
+
+            // 진동 중이면 즉시 중지 (콜백 여부와 관계없이)
+            if (wasVibrating) {
+                stopVibration()
+                Log.d(TAG, "볼륨 버튼으로 진동 중지됨")
+            }
+
+            // Flutter 콜백이 있으면 호출
+            volumeButtonCallback?.let { callback ->
+                callback.success(if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) "up" else "down")
+                volumeButtonCallback = null
+                return true // 볼륨 변경 방지
+            }
+
+            // 콜백이 없어도 진동 중이었으면 볼륨 변경 방지
+            if (wasVibrating) {
+                return true
+            }
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

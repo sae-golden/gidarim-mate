@@ -7,7 +7,6 @@ import '../models/medication.dart';
 import '../services/ivf_medication_matcher.dart';
 import '../services/medication_storage_service.dart';
 import '../services/notification_scheduler_service.dart';
-import '../services/cloud_storage_service.dart';
 
 /// 시간대 슬롯
 enum TimeSlot {
@@ -181,6 +180,16 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
         break;
     }
 
+    // dosage에서 수량 파싱 (예: "2대", "1정", "3매")
+    int dosageQuantity = 1;
+    if (med.dosage != null && med.dosage!.isNotEmpty) {
+      // 숫자만 추출
+      final numericMatch = RegExp(r'(\d+)').firstMatch(med.dosage!);
+      if (numericMatch != null) {
+        dosageQuantity = int.tryParse(numericMatch.group(1)!) ?? 1;
+      }
+    }
+
     // 시간 파싱
     final timeParts = med.time.split(':');
     if (timeParts.length == 2) {
@@ -200,7 +209,7 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
         slot = TimeSlot.night;
       }
 
-      _selectedTimes[slot] = DoseTime(slot: slot, time: time, quantity: 1);
+      _selectedTimes[slot] = DoseTime(slot: slot, time: time, quantity: dosageQuantity);
     }
 
     // 패턴
@@ -1103,9 +1112,9 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
     if (_selectedDates.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('복용일을 선택해 주세요'),
-            backgroundColor: AppColors.success,
+          SnackBar(
+            content: const Text('복용일을 선택해 주세요'),
+            backgroundColor: AppColors.warning,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -1114,26 +1123,6 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
     }
 
     setState(() => _isSaving = true);
-    // 시간 및 수량 계산
-    String timeString;
-    int dailyTotal;
-
-    if (_selectedTimes.isNotEmpty) {
-      // 선택된 시간대가 있는 경우
-      final sortedTimes = _selectedTimes.entries.toList()
-        ..sort((a, b) => a.key.index.compareTo(b.key.index));
-      final firstTime = sortedTimes.first.value.time;
-      timeString = '${firstTime.hour.toString().padLeft(2, '0')}:${firstTime.minute.toString().padLeft(2, '0')}';
-
-      dailyTotal = 0;
-      for (final entry in sortedTimes) {
-        dailyTotal += entry.value.quantity;
-      }
-    } else {
-      // 시간대 미선택 시 기본값
-      timeString = '09:00';
-      dailyTotal = _quantity;
-    }
 
     // 패턴 문자열 생성
     String pattern;
@@ -1177,65 +1166,123 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
         break;
     }
 
-    final medication = Medication(
-      id: _isEditMode
-          ? widget.editingMedication!.id
-          : DateTime.now().millisecondsSinceEpoch.toString(),
-      name: _nameController.text,
-      type: medicationType,
-      time: timeString,
-      pattern: pattern,
-      startDate: startDate,
-      endDate: endDate,
-      dosage: '$dailyTotal${_formType.unit}',
-      totalCount: _selectedDates.length * dailyTotal,
-    );
-
     // 로컬 저장소에 저장
     try {
       if (_isEditMode) {
-        // 수정 모드: 로컬 + 클라우드 직접 업데이트
-        await MedicationStorageService.updateMedication(medication, addToSyncQueue: false);
+        // 수정 모드: 단일 약물 업데이트 (시간 변경 불가, 기존 로직 유지)
+        String timeString;
+        int dailyTotal;
 
-        // 클라우드에 직접 업데이트 (로그인 상태일 때)
-        if (CloudStorageService.isLoggedIn) {
-          await CloudStorageService.addMedication(medication); // upsert로 동작
+        if (_selectedTimes.isNotEmpty) {
+          final sortedTimes = _selectedTimes.entries.toList()
+            ..sort((a, b) => a.key.index.compareTo(b.key.index));
+          final firstTime = sortedTimes.first.value.time;
+          timeString = '${firstTime.hour.toString().padLeft(2, '0')}:${firstTime.minute.toString().padLeft(2, '0')}';
+          dailyTotal = sortedTimes.first.value.quantity;
+        } else {
+          timeString = '09:00';
+          dailyTotal = _quantity;
         }
 
-        // 기존 알림 취소 후 새로 스케줄링
-        await NotificationSchedulerService.cancelMedicationNotification(medication.id);
-      } else {
-        // 새로 추가: 로컬 + 클라우드 직접 추가 (SyncQueue 사용 안함)
-        await MedicationStorageService.addMedication(medication, addToSyncQueue: false);
-
-        // 클라우드에 직접 추가 (로그인 상태일 때)
-        if (CloudStorageService.isLoggedIn) {
-          await CloudStorageService.addMedication(medication);
-        }
-      }
-
-      // 알림 스케줄링
-      await NotificationSchedulerService.scheduleMedication(medication);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_isEditMode
-                ? '${medication.name}이(가) 수정되었습니다'
-                : '${medication.name}이(가) 추가되었습니다'),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-          ),
+        final medication = Medication(
+          id: widget.editingMedication!.id,
+          name: _nameController.text,
+          type: medicationType,
+          time: timeString,
+          pattern: pattern,
+          startDate: startDate,
+          endDate: endDate,
+          dosage: '$dailyTotal${_formType.unit}',
+          totalCount: _selectedDates.length * dailyTotal,
         );
-        Navigator.pop(context, medication);
+
+        await MedicationStorageService.updateMedication(medication, addToSyncQueue: false);
+        await NotificationSchedulerService.cancelMedicationNotification(medication.id);
+        await NotificationSchedulerService.scheduleMedication(medication);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${medication.name}이(가) 수정되었습니다'),
+              backgroundColor: AppColors.success,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+            ),
+          );
+          Navigator.pop(context, true);
+        }
+      } else {
+        // 새로 추가 모드: 각 시간대별로 별도의 Medication 객체 생성
+        final medications = <Medication>[];
+        final baseId = DateTime.now().millisecondsSinceEpoch.toString();
+
+        if (_selectedTimes.isNotEmpty) {
+          // 선택된 시간대가 있는 경우 - 각 시간대별로 별도 Medication 생성
+          final sortedTimes = _selectedTimes.entries.toList()
+            ..sort((a, b) => a.key.index.compareTo(b.key.index));
+
+          for (var i = 0; i < sortedTimes.length; i++) {
+            final entry = sortedTimes[i];
+            final time = entry.value.time;
+            final timeString = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+            final quantity = entry.value.quantity;
+
+            medications.add(Medication(
+              id: '${baseId}_$i', // 고유 ID 부여
+              name: _nameController.text,
+              type: medicationType,
+              time: timeString,
+              pattern: pattern,
+              startDate: startDate,
+              endDate: endDate,
+              dosage: '$quantity${_formType.unit}',
+              totalCount: _selectedDates.length * quantity,
+            ));
+          }
+        } else {
+          // 시간대 미선택 시 기본값으로 단일 Medication 생성
+          medications.add(Medication(
+            id: baseId,
+            name: _nameController.text,
+            type: medicationType,
+            time: '09:00',
+            pattern: pattern,
+            startDate: startDate,
+            endDate: endDate,
+            dosage: '$_quantity${_formType.unit}',
+            totalCount: _selectedDates.length * _quantity,
+          ));
+        }
+
+        // 모든 약물 저장 및 알림 스케줄링
+        for (final medication in medications) {
+          await MedicationStorageService.addMedication(medication, addToSyncQueue: false);
+          await NotificationSchedulerService.scheduleMedication(medication);
+        }
+
+        if (mounted) {
+          final message = medications.length > 1
+              ? '${_nameController.text}이(가) ${medications.length}개 시간대로 추가되었습니다'
+              : '${_nameController.text}이(가) 추가되었습니다';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: AppColors.success,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+            ),
+          );
+          Navigator.pop(context, true);
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('저장 실패: $e'),
-            backgroundColor: AppColors.success,
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
           ),
         );
       }
@@ -1288,12 +1335,7 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
       // 1. 로컬에서 삭제
       await MedicationStorageService.deleteMedication(medicationId, addToSyncQueue: false);
 
-      // 2. 클라우드에서 즉시 삭제 (로그인 상태일 때)
-      if (CloudStorageService.isLoggedIn) {
-        await CloudStorageService.deleteMedication(medicationId);
-      }
-
-      // 3. 알림 취소
+      // 2. 알림 취소
       await NotificationSchedulerService.cancelMedicationNotification(medicationId);
 
       if (mounted) {
@@ -1302,17 +1344,19 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
             content: Text('${widget.editingMedication!.name}이(가) 삭제되었습니다'),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
           ),
         );
-        Navigator.pop(context, 'deleted');
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('삭제 실패: $e'),
-            backgroundColor: AppColors.success,
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
           ),
         );
       }

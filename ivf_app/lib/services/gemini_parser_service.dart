@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/voice_recognition_result.dart';
+
+// Gemini API 키 (무료 티어)
+const String _geminiApiKey = 'AIzaSyB877xe3wZhqrTHWwiFpwmrF-iUHBoFzpQ';
 
 /// Gemini AI 기반 약물 텍스트 파싱 서비스
 class GeminiParserService {
@@ -14,8 +16,7 @@ class GeminiParserService {
   static Future<bool> initialize() async {
     if (_initialized) return true;
 
-    final apiKey = dotenv.env['GEMINI_API_KEY'];
-    if (apiKey == null || apiKey.isEmpty) {
+    if (_geminiApiKey.isEmpty) {
       debugPrint('GEMINI_API_KEY가 설정되지 않았습니다.');
       return false;
     }
@@ -23,7 +24,7 @@ class GeminiParserService {
     try {
       _model = GenerativeModel(
         model: 'gemini-2.5-flash-lite', // 무료 10회/분
-        apiKey: apiKey,
+        apiKey: _geminiApiKey,
         generationConfig: GenerationConfig(
           temperature: 0.1, // 낮은 온도로 일관된 결과
           maxOutputTokens: 1024,
@@ -59,6 +60,7 @@ class GeminiParserService {
 - type: 약물 종류 - "oral"(알약/경구), "injection"(주사), "suppository"(질정/좌약), "patch"(패치) 중 하나
 - quantity: 복용 개수 (숫자, 기본값 1)
 - times: 복용 시간 배열 ["HH:mm" 형식] (예: ["08:00", "20:00"])
+- durationDays: 복용 기간 (일 수, 숫자)
 
 규칙:
 1. "아침"은 08:00, "점심"은 12:00, "저녁"은 18:00, "밤"은 22:00으로 변환
@@ -68,11 +70,18 @@ class GeminiParserService {
 5. 패치 키워드가 있으면 type은 "patch"
 6. 명시되지 않으면 type은 "oral"
 7. 시간이 명시되지 않으면 times는 ["08:00"]
+8. 복용 기간 변환:
+   - 기간 언급이 없으면 → durationDays는 1 (오늘 하루만)
+   - "일주일", "7일", "1주" → durationDays는 7
+   - "2주", "14일" → durationDays는 14
+   - "한달", "1달", "30일" → durationDays는 30
+   - "3일 동안" → durationDays는 3
+   - "~까지"로 특정 날짜가 명시되면 해당 날짜까지의 일수 계산
 
 JSON 배열만 반환하고 다른 텍스트는 포함하지 마.
 
-예시 입력: "프로기노바 아침 저녁 하나씩, 고나엘에프 주사 밤 10시"
-예시 출력: [{"name":"프로기노바","type":"oral","quantity":1,"times":["08:00","18:00"]},{"name":"고나엘에프","type":"injection","quantity":1,"times":["22:00"]}]
+예시 입력: "프로기노바 아침 저녁 하나씩 일주일 동안, 고나엘에프 주사 밤 10시"
+예시 출력: [{"name":"프로기노바","type":"oral","quantity":1,"times":["08:00","18:00"],"durationDays":7},{"name":"고나엘에프","type":"injection","quantity":1,"times":["22:00"],"durationDays":1}]
 ''';
 
       final response = await _model!.generateContent([Content.text(prompt)]);
@@ -117,6 +126,7 @@ JSON 배열만 반환하고 다른 텍스트는 포함하지 마.
         final type = _parseType(typeStr);
 
         final quantity = item['quantity'] as int? ?? 1;
+        final durationDays = item['durationDays'] as int? ?? 1;
 
         final times = item['times'] as List<dynamic>? ?? ['08:00'];
         TimeOfDay? firstTime;
@@ -137,12 +147,18 @@ JSON 배열만 반환하고 다른 텍스트는 포함하지 마.
           }
         }
 
+        // 시작일과 종료일 계산
+        final startDate = DateTime.now();
+        final endDate = startDate.add(Duration(days: durationDays - 1));
+
         medications.add(ParsedMedication(
           name: name,
           type: type,
           quantity: quantity,
           time: firstTime,
           timeText: timeText,
+          startDate: startDate,
+          endDate: endDate,
         ));
       }
 
@@ -184,18 +200,11 @@ JSON 배열만 반환하고 다른 텍스트는 포함하지 마.
 
   /// API 키가 설정되어 있는지 확인
   static bool get isConfigured {
-    final apiKey = dotenv.env['GEMINI_API_KEY'];
-
-    // 플레이스홀더나 빈 값 체크
-    if (apiKey == null || apiKey.isEmpty) {
+    if (_geminiApiKey.isEmpty) {
       if (kDebugMode) debugPrint('❌ Gemini API 키 없음');
       return false;
     }
-    if (apiKey.contains('여기에') || apiKey.contains('API_키')) {
-      if (kDebugMode) debugPrint('❌ Gemini 플레이스홀더 키');
-      return false;
-    }
-    if (!apiKey.startsWith('AIza')) {
+    if (!_geminiApiKey.startsWith('AIza')) {
       if (kDebugMode) debugPrint('❌ Gemini 잘못된 키 형식');
       return false;
     }

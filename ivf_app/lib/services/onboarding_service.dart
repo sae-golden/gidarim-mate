@@ -4,7 +4,6 @@ import '../models/onboarding_checklist.dart';
 import 'hospital_service.dart';
 import 'notification_service.dart';
 import 'medication_storage_service.dart';
-import 'cloud_storage_service.dart';
 
 /// 온보딩 체크리스트 서비스
 class OnboardingService {
@@ -45,18 +44,11 @@ class OnboardingService {
     );
   }
 
-  /// 치료 단계 저장 (로컬 + 클라우드)
+  /// 치료 단계 저장 (로컬)
   static Future<void> saveTreatmentStage(OnboardingTreatmentStage stage, {bool syncToCloud = true}) async {
-    // 1. 로컬 저장
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_treatmentStageKey, stage.index);
-    debugPrint('✅ 치료 단계 로컬 저장: ${stage.shortTitle}');
-
-    // 2. 클라우드 저장 (로그인된 경우)
-    if (syncToCloud && CloudStorageService.isLoggedIn) {
-      await CloudStorageService.saveTreatmentStage(stage.index);
-      debugPrint('☁️ 치료 단계 클라우드 저장: ${stage.index}');
-    }
+    debugPrint('✅ 치료 단계 저장: ${stage.shortTitle}');
   }
 
   /// 치료 단계 조회

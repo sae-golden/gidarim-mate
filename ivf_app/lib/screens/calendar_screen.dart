@@ -10,6 +10,7 @@ import '../services/medication_storage_service.dart';
 import '../services/notification_scheduler_service.dart';
 import '../services/additional_record_service.dart';
 import '../services/simple_treatment_service.dart';
+import '../services/blood_test_service.dart';
 import '../models/medication.dart' as med_model;
 import '../models/additional_records.dart';
 import '../models/simple_treatment_cycle.dart';
@@ -341,6 +342,13 @@ class _CalendarScreenState extends State<CalendarScreen> with WidgetsBindingObse
       additionalDetails.putIfAbsent(dateKey, () => []).add(record);
     }
     for (final record in hospitalVisitRecords) {
+      final dateKey = DateTime(record.date.year, record.date.month, record.date.day);
+      additionalDetails.putIfAbsent(dateKey, () => []).add(record);
+    }
+
+    // 피검사 기록 로드 (추가)
+    final bloodTestRecords = await BloodTestService.getBloodTestsByDateRange(startDate, endDate);
+    for (final record in bloodTestRecords) {
       final dateKey = DateTime(record.date.year, record.date.month, record.date.day);
       additionalDetails.putIfAbsent(dateKey, () => []).add(record);
     }
@@ -1577,6 +1585,9 @@ class _CalendarScreenState extends State<CalendarScreen> with WidgetsBindingObse
       summary = record.summaryText;
     } else if (record is HospitalVisitRecord) {
       recordType = RecordType.hospitalVisit;
+      summary = record.summaryText;
+    } else if (record is BloodTest) {
+      recordType = RecordType.bloodTest;
       summary = record.summaryText;
     } else {
       return const SizedBox.shrink();

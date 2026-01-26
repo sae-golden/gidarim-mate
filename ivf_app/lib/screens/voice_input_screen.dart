@@ -10,7 +10,7 @@ import '../models/voice_recognition_result.dart';
 import '../services/gemini_parser_service.dart';
 import '../services/ivf_medication_matcher.dart';
 import '../services/medication_storage_service.dart';
-import 'quick_add_medication_screen.dart' show TimeSlot, TimeSlotExtension, DoseTime;
+import 'quick_add_medication_screen.dart';
 
 /// 개선된 음성 입력 화면
 class ImprovedVoiceInputScreen extends StatefulWidget {
@@ -88,7 +88,7 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('음성 인식 오류: ${error.errorMsg}'),
-              backgroundColor: AppColors.success,
+              backgroundColor: AppColors.error,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -105,7 +105,7 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('음성 인식을 사용할 수 없습니다. 마이크 권한을 확인해주세요.'),
-            backgroundColor: AppColors.success,
+            backgroundColor: AppColors.warning,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -366,7 +366,7 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('저장 실패: $e'),
-            backgroundColor: AppColors.success,
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -652,9 +652,9 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
           const SizedBox(height: AppSpacing.m),
 
           // 예시들
-          _buildExample('"프로기노바 알약 1개 아침 8시"'),
-          _buildExample('"아스피린 1개 저녁 식후"'),
-          _buildExample('"고나엘에프 주사 1개 밤 10시"'),
+          _buildExample('"퓨레곤 주사 1개 밤 9시"'),
+          _buildExample('"크녹산 알약 1개 아침 8시"'),
+          _buildExample('"아스피린 알약 1개 저녁 식후"'),
 
           const SizedBox(height: AppSpacing.m),
           const Divider(),
@@ -678,7 +678,7 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '"프로기노바 1개 아침, 아스피린 저녁, 고나엘에프 주사 밤 10시"',
+                      '"퓨레곤 밤 9시, 크녹산 아침, 아스피린 저녁"',
                       style: AppTextStyles.caption.copyWith(
                         color: AppColors.textSecondary,
                         fontStyle: FontStyle.italic,
@@ -937,946 +937,94 @@ class _ImprovedVoiceInputScreenState extends State<ImprovedVoiceInputScreen>
   }
 
   void _showEditScreen(int index, ParsedMedication med) async {
-    final result = await Navigator.push<ParsedMedication>(
+    // ParsedMedication을 Medication으로 변환
+    final medication = _convertToMedication(med);
+
+    final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (context) => _MedicationEditScreen(medication: med),
+        builder: (context) => QuickAddMedicationScreen(
+          editingMedication: medication,
+        ),
       ),
     );
 
-    if (result != null && mounted) {
-      setState(() {
-        _result!.medications[index] = result;
-      });
+    // 수정 완료 후 약물 정보 새로고침
+    if (result == true && mounted) {
+      // 저장소에서 업데이트된 약물 조회
+      final updatedMed = await MedicationStorageService.getMedicationById(medication.id);
+      if (updatedMed != null) {
+        setState(() {
+          _result!.medications[index] = _convertToParsedMedication(updatedMed);
+        });
+      }
     }
   }
 
-  String _getTypeName(MedicationType type) {
-    switch (type) {
-      case MedicationType.oral:
-        return '알약';
-      case MedicationType.injection:
-        return '주사';
-      case MedicationType.suppository:
-        return '질정';
-      case MedicationType.patch:
-        return '한약';
-    }
-  }
-}
+  /// ParsedMedication을 Medication으로 변환
+  medication_model.Medication _convertToMedication(ParsedMedication med) {
+    final time = med.time ?? const TimeOfDay(hour: 8, minute: 0);
+    final timeString = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
 
-/// 약물 수정 전체 화면 (직접 입력과 동일한 UI - 다중 시간 지원)
-class _MedicationEditScreen extends StatefulWidget {
-  final ParsedMedication medication;
-
-  const _MedicationEditScreen({required this.medication});
-
-  @override
-  State<_MedicationEditScreen> createState() => _MedicationEditScreenState();
-}
-
-class _MedicationEditScreenState extends State<_MedicationEditScreen> {
-  late TextEditingController _nameController;
-  late MedicationType _selectedType;
-  final FocusNode _nameFocusNode = FocusNode();
-
-  // 자동완성
-  List<IvfMedicationData> _suggestions = [];
-  bool _showSuggestions = false;
-
-  // 다중 시간 선택 (TimeSlot 기반)
-  final Map<TimeSlot, DoseTime> _selectedTimes = {};
-
-  // 캘린더 날짜 선택
-  Set<DateTime> _selectedDates = {};
-  DateTime _displayMonth = DateTime.now();
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController(text: widget.medication.name);
-    _selectedType = widget.medication.type;
-
-    // 자동완성 리스너
-    _nameController.addListener(_onNameChanged);
-    _nameFocusNode.addListener(_onFocusChanged);
-
-    // 기존 시간 정보로 초기화
-    _initializeTimesFromMedication();
-
-    // 기존 날짜 정보로 캘린더 초기화
-    _initializeDatesFromMedication();
-
-    // 초기 이름으로 자동완성 시도
-    _tryAutoCorrectName();
+    return medication_model.Medication(
+      id: '${DateTime.now().millisecondsSinceEpoch}_voice',
+      name: med.name,
+      dosage: '${med.quantity}${_getUnit(med.type)}',
+      time: timeString,
+      startDate: med.startDate,
+      endDate: med.endDate,
+      type: _convertType(med.type),
+      pattern: '매일',
+      totalCount: med.durationDays * med.quantity,
+    );
   }
 
-  void _initializeDatesFromMedication() {
-    // 초기 상태: 빈 캘린더 (사용자가 직접 선택)
-    _selectedDates.clear();
-
-    // 캘린더 표시 월을 현재 월로 설정
-    _displayMonth = DateTime.now();
-  }
-
-  void _onNameChanged() {
-    final query = _nameController.text.trim();
-    if (query.isEmpty) {
-      setState(() {
-        _suggestions = [];
-        _showSuggestions = false;
-      });
-      return;
+  /// Medication을 ParsedMedication으로 변환
+  ParsedMedication _convertToParsedMedication(medication_model.Medication med) {
+    // 시간 파싱
+    TimeOfDay? time;
+    if (med.time.contains(':')) {
+      final parts = med.time.split(':');
+      final hour = int.tryParse(parts[0]) ?? 8;
+      final minute = int.tryParse(parts[1]) ?? 0;
+      time = TimeOfDay(hour: hour, minute: minute);
     }
 
-    final matches = IvfMedicationMatcher.getSuggestions(query, limit: 5);
-    setState(() {
-      _suggestions = matches.map((m) => m.medication).toList();
-      _showSuggestions = _suggestions.isNotEmpty && _nameFocusNode.hasFocus;
-    });
-  }
-
-  void _onFocusChanged() {
-    if (!_nameFocusNode.hasFocus) {
-      Future.delayed(const Duration(milliseconds: 200), () {
-        if (mounted) {
-          setState(() => _showSuggestions = false);
-        }
-      });
-    } else {
-      _onNameChanged();
-    }
-  }
-
-  void _tryAutoCorrectName() {
-    // AI가 파싱한 이름을 IVF 약물 사전과 매칭
-    final match = IvfMedicationMatcher.matchMedication(widget.medication.name);
-    if (match != null && match.confidence > 0.7) {
-      _nameController.text = match.medication.name;
-      // 약물 종류도 자동 설정
-      _selectedType = _convertFormType(match.medication.type);
-    }
-  }
-
-  MedicationType _convertFormType(MedicationFormType formType) {
-    switch (formType) {
-      case MedicationFormType.injection:
-        return MedicationType.injection;
-      case MedicationFormType.oral:
-        return MedicationType.oral;
-      case MedicationFormType.vaginal:
-        return MedicationType.suppository;
-      case MedicationFormType.patch:
-        return MedicationType.patch;
-    }
-  }
-
-  void _selectMedication(IvfMedicationData medication) {
-    setState(() {
-      _nameController.text = medication.name;
-      _selectedType = _convertFormType(medication.type);
-      _showSuggestions = false;
-    });
-    _nameFocusNode.unfocus();
-  }
-
-  void _initializeTimesFromMedication() {
-    final med = widget.medication;
-
-    // timeText에서 여러 시간 파싱 (예: "오전 8시, 오후 12시, 오후 6시")
-    if (med.timeText != null && med.timeText!.isNotEmpty) {
-      final timeTexts = med.timeText!.split(',').map((t) => t.trim()).toList();
-
-      for (final timeText in timeTexts) {
-        final slot = _matchTimeSlot(timeText);
-        if (slot != null && !_selectedTimes.containsKey(slot)) {
-          final time = _parseTimeFromText(timeText) ?? slot.defaultTime;
-          _selectedTimes[slot] = DoseTime(
-            slot: slot,
-            time: time,
-            quantity: med.quantity,
-          );
-        }
+    // 수량 파싱
+    int quantity = 1;
+    if (med.dosage != null) {
+      final numericMatch = RegExp(r'(\d+)').firstMatch(med.dosage!);
+      if (numericMatch != null) {
+        quantity = int.tryParse(numericMatch.group(1)!) ?? 1;
       }
     }
 
-    // time이 있으면 해당 슬롯 추가
-    if (med.time != null && _selectedTimes.isEmpty) {
-      final slot = _getSlotFromTime(med.time!);
-      _selectedTimes[slot] = DoseTime(
-        slot: slot,
-        time: med.time!,
-        quantity: med.quantity,
-      );
+    // 타입 변환
+    MedicationType type;
+    switch (med.type) {
+      case medication_model.MedicationType.injection:
+        type = MedicationType.injection;
+        break;
+      case medication_model.MedicationType.oral:
+        type = MedicationType.oral;
+        break;
+      case medication_model.MedicationType.suppository:
+        type = MedicationType.suppository;
+        break;
+      case medication_model.MedicationType.patch:
+        type = MedicationType.patch;
+        break;
     }
 
-    // 아무것도 없으면 기본값
-    if (_selectedTimes.isEmpty) {
-      _selectedTimes[TimeSlot.morning] = DoseTime(
-        slot: TimeSlot.morning,
-        time: const TimeOfDay(hour: 8, minute: 0),
-        quantity: med.quantity,
-      );
-    }
-  }
-
-  TimeSlot? _matchTimeSlot(String text) {
-    if (text.contains('오전 8') || text.contains('기상') || text.contains('아침')) {
-      return TimeSlot.morning;
-    } else if (text.contains('오후 12') || text.contains('점심') || text.contains('낮')) {
-      return TimeSlot.noon;
-    } else if (text.contains('오후 6') || text.contains('저녁')) {
-      return TimeSlot.evening;
-    } else if (text.contains('오후 10') || text.contains('밤') || text.contains('취침')) {
-      return TimeSlot.night;
-    }
-    return null;
-  }
-
-  TimeOfDay? _parseTimeFromText(String text) {
-    // "오전 8시", "오후 6시" 형태 파싱
-    final match = RegExp(r'(오전|오후)\s*(\d{1,2})').firstMatch(text);
-    if (match != null) {
-      final period = match.group(1);
-      var hour = int.tryParse(match.group(2)!) ?? 8;
-      if (period == '오후' && hour < 12) hour += 12;
-      if (period == '오전' && hour == 12) hour = 0;
-      return TimeOfDay(hour: hour, minute: 0);
-    }
-    return null;
-  }
-
-  TimeSlot _getSlotFromTime(TimeOfDay time) {
-    final hour = time.hour;
-    if (hour >= 5 && hour < 11) return TimeSlot.morning;
-    if (hour >= 11 && hour < 15) return TimeSlot.noon;
-    if (hour >= 15 && hour < 20) return TimeSlot.evening;
-    return TimeSlot.night;
-  }
-
-  @override
-  void dispose() {
-    _nameController.removeListener(_onNameChanged);
-    _nameController.dispose();
-    _nameFocusNode.removeListener(_onFocusChanged);
-    _nameFocusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: Text(
-            '약물 정보 수정',
-            style: AppTextStyles.h3.copyWith(color: AppColors.textPrimary),
-          ),
-          centerTitle: true,
-        ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.m),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 1. 약 이름
-                  _buildNameSection(),
-                  const SizedBox(height: AppSpacing.l),
-
-                  // 2. 종류 선택
-                  _buildTypeSection(),
-                  const SizedBox(height: AppSpacing.l),
-
-                  // 3. 복용 시간대 선택 (다중)
-                  _buildTimeSlotSection(),
-                  const SizedBox(height: AppSpacing.l),
-
-                  // 4. 시간 & 수량 설정
-                  if (_selectedTimes.isNotEmpty) _buildTimeQuantitySection(),
-                  const SizedBox(height: AppSpacing.l),
-
-                  // 5. 복용 기간 설정
-                  _buildDateRangeSection(),
-                ],
-              ),
-            ),
-          ),
-
-          // 저장 버튼
-          _buildSaveButton(),
-        ],
-      ),
-      ),
+    return ParsedMedication(
+      name: med.name,
+      type: type,
+      quantity: quantity,
+      time: time,
+      startDate: med.startDate,
+      endDate: med.endDate,
+      isSelected: true,
     );
-  }
-
-  Widget _buildNameSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '약 이름',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.s),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: TextField(
-            controller: _nameController,
-            focusNode: _nameFocusNode,
-            decoration: InputDecoration(
-              hintText: '검색 또는 직접 입력',
-              hintStyle: TextStyle(color: AppColors.textDisabled),
-              prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.m,
-                vertical: AppSpacing.m,
-              ),
-            ),
-          ),
-        ),
-
-        // 자동완성 목록
-        if (_showSuggestions && _suggestions.isNotEmpty)
-          Container(
-            margin: const EdgeInsets.only(top: 4),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              children: _suggestions.map((med) {
-                return InkWell(
-                  onTap: () => _selectMedication(med),
-                  child: Container(
-                    padding: const EdgeInsets.all(AppSpacing.m),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: AppColors.border.withOpacity(0.5),
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryPurpleLight,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            med.type.icon,
-                            style: const TextStyle(fontSize: 16),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.s),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                med.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Text(
-                                med.category,
-                                style: AppTextStyles.caption,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildTypeSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '종류',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.s),
-        Row(
-          children: MedicationType.values.map((type) {
-            final isSelected = _selectedType == type;
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => setState(() => _selectedType = type),
-                child: Container(
-                  margin: EdgeInsets.only(
-                    right: type != MedicationType.patch ? 8 : 0,
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primaryPurple : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected ? AppColors.primaryPurple : AppColors.border,
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        _getTypeEmoji(type),
-                        style: const TextStyle(fontSize: 24),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _getTypeName(type),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isSelected ? Colors.white : AppColors.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  // 다중 시간대 선택 (기상/점심/저녁/취침)
-  Widget _buildTimeSlotSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '언제 복용하나요?',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.s),
-        Row(
-          children: TimeSlot.values.map((slot) {
-            final isSelected = _selectedTimes.containsKey(slot);
-
-            return Expanded(
-              child: GestureDetector(
-                onTap: () {
-                  setState(() {
-                    if (isSelected) {
-                      _selectedTimes.remove(slot);
-                    } else {
-                      _selectedTimes[slot] = DoseTime(
-                        slot: slot,
-                        time: slot.defaultTime,
-                        quantity: 1,
-                      );
-                    }
-                  });
-                },
-                child: Container(
-                  margin: EdgeInsets.only(
-                    right: slot != TimeSlot.night ? 8 : 0,
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.primaryPurpleLight
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected
-                          ? AppColors.primaryPurple
-                          : AppColors.border,
-                      width: isSelected ? 2 : 1,
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        slot.emoji,
-                        style: const TextStyle(fontSize: 24),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        slot.label,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isSelected
-                              ? AppColors.primaryPurple
-                              : AppColors.textPrimary,
-                        ),
-                      ),
-                      if (isSelected)
-                        const Icon(
-                          Icons.check_circle,
-                          color: AppColors.primaryPurple,
-                          size: 16,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  // 시간 & 수량 설정
-  Widget _buildTimeQuantitySection() {
-    int dailyTotal = 0;
-    final sortedTimes = _selectedTimes.entries.toList()
-      ..sort((a, b) => a.key.index.compareTo(b.key.index));
-    for (final entry in sortedTimes) {
-      dailyTotal += entry.value.quantity;
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              '시간 & 수량 설정',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.primaryPurple,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '하루 총 $dailyTotal개',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.s),
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.m),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            children: sortedTimes.asMap().entries.map((mapEntry) {
-              final index = mapEntry.key;
-              final entry = mapEntry.value;
-              final slot = entry.key;
-              final doseTime = entry.value;
-              final isLast = index == sortedTimes.length - 1;
-
-              return Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        Text(slot.emoji, style: const TextStyle(fontSize: 20)),
-                        const SizedBox(width: 8),
-                        Text(
-                          slot.label,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-
-                        // 시간 조정
-                        IconButton(
-                          onPressed: () {
-                            setState(() {
-                              final newHour = (doseTime.time.hour - 1) % 24;
-                              doseTime.time = TimeOfDay(hour: newHour, minute: doseTime.time.minute);
-                            });
-                          },
-                          icon: const Icon(Icons.remove_circle_outline, size: 20),
-                          color: AppColors.textSecondary,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                        ),
-                        GestureDetector(
-                          onTap: () async {
-                            final picked = await showTimePicker(
-                              context: context,
-                              initialTime: doseTime.time,
-                            );
-                            if (picked != null) {
-                              setState(() => doseTime.time = picked);
-                            }
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryPurpleLight,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '${doseTime.time.hour.toString().padLeft(2, '0')}:${doseTime.time.minute.toString().padLeft(2, '0')}',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primaryPurple,
-                              ),
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () {
-                            setState(() {
-                              final newHour = (doseTime.time.hour + 1) % 24;
-                              doseTime.time = TimeOfDay(hour: newHour, minute: doseTime.time.minute);
-                            });
-                          },
-                          icon: const Icon(Icons.add_circle_outline, size: 20),
-                          color: AppColors.textSecondary,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                        ),
-
-                        const Spacer(),
-
-                        // 수량 조정
-                        IconButton(
-                          onPressed: doseTime.quantity > 1
-                              ? () => setState(() => doseTime.quantity--)
-                              : null,
-                          icon: const Icon(Icons.remove_circle_outline, size: 20),
-                          color: doseTime.quantity > 1
-                              ? AppColors.primaryPurple
-                              : AppColors.textDisabled,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                        ),
-                        Container(
-                          width: 40,
-                          alignment: Alignment.center,
-                          child: Text(
-                            '${doseTime.quantity}개',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => setState(() => doseTime.quantity++),
-                          icon: const Icon(Icons.add_circle_outline, size: 20),
-                          color: AppColors.primaryPurple,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (!isLast)
-                    Divider(color: AppColors.border.withOpacity(0.5), height: 1),
-                ],
-              );
-            }).toList(),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // 복용일 선택 (인라인 캘린더)
-  Widget _buildDateRangeSection() {
-    // 선택된 날짜 기간 계산
-    String periodText = '';
-    if (_selectedDates.isNotEmpty) {
-      final sortedDates = _selectedDates.toList()..sort();
-      final firstDate = sortedDates.first;
-      final lastDate = sortedDates.last;
-      final days = _selectedDates.length;
-      periodText = '${firstDate.month}/${firstDate.day} ~ ${lastDate.month}/${lastDate.day} (${days}일간)';
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '복용일 선택',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.m),
-
-        // 미니 캘린더
-        _buildMiniCalendar(),
-
-        // 선택된 기간 표시
-        if (_selectedDates.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.s),
-            child: Text(
-              periodText,
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.primaryPurple,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildMiniCalendar() {
-    final year = _displayMonth.year;
-    final month = _displayMonth.month;
-    final firstDay = DateTime(year, month, 1);
-    final lastDay = DateTime(year, month + 1, 0);
-    final startWeekday = firstDay.weekday % 7; // 일요일=0
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.m),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        children: [
-          // 월 네비게이션
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                onPressed: () {
-                  setState(() {
-                    _displayMonth = DateTime(year, month - 1);
-                  });
-                },
-                icon: const Icon(Icons.chevron_left),
-                color: AppColors.textSecondary,
-              ),
-              Text(
-                '$year년 $month월',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              IconButton(
-                onPressed: () {
-                  setState(() {
-                    _displayMonth = DateTime(year, month + 1);
-                  });
-                },
-                icon: const Icon(Icons.chevron_right),
-                color: AppColors.textSecondary,
-              ),
-            ],
-          ),
-
-          // 요일 헤더
-          Row(
-            children: ['일', '월', '화', '수', '목', '금', '토'].map((day) {
-              return Expanded(
-                child: Center(
-                  child: Text(
-                    day,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: day == '일'
-                          ? Colors.red
-                          : day == '토'
-                              ? Colors.blue
-                              : AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 8),
-
-          // 날짜 그리드
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7,
-              childAspectRatio: 1,
-            ),
-            itemCount: startWeekday + lastDay.day,
-            itemBuilder: (context, index) {
-              if (index < startWeekday) {
-                return const SizedBox();
-              }
-
-              final day = index - startWeekday + 1;
-              final date = DateTime(year, month, day);
-              final isSelected = _selectedDates.any(
-                (d) => d.year == date.year && d.month == date.month && d.day == date.day,
-              );
-              final isToday = DateTime.now().year == date.year &&
-                  DateTime.now().month == date.month &&
-                  DateTime.now().day == date.day;
-              final isPast = date.isBefore(DateTime.now().subtract(const Duration(days: 1)));
-
-              return GestureDetector(
-                onTap: isPast
-                    ? null
-                    : () {
-                        setState(() {
-                          if (isSelected) {
-                            _selectedDates.removeWhere(
-                              (d) => d.year == date.year && d.month == date.month && d.day == date.day,
-                            );
-                          } else {
-                            _selectedDates.add(date);
-                          }
-                          // 선택된 날짜를 medication에 반영
-                          _updateMedicationDates();
-                        });
-                      },
-                child: Container(
-                  margin: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.primaryPurple
-                        : null,
-                    shape: BoxShape.circle,
-                    border: !isSelected && !isPast
-                        ? Border.all(
-                            color: isToday
-                                ? AppColors.primaryPurple
-                                : AppColors.border,
-                            width: isToday ? 2 : 1,
-                          )
-                        : null,
-                  ),
-                  child: Center(
-                    child: Text(
-                      '$day',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: isSelected || isToday ? FontWeight.w600 : null,
-                        color: isPast
-                            ? AppColors.textDisabled
-                            : isSelected
-                                ? Colors.white
-                                : AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _updateMedicationDates() {
-    if (_selectedDates.isEmpty) return;
-
-    final sortedDates = _selectedDates.toList()..sort();
-    widget.medication.startDate = sortedDates.first;
-    widget.medication.endDate = sortedDates.last;
-  }
-
-  Widget _buildSaveButton() {
-    final isValid = _nameController.text.trim().isNotEmpty &&
-        _selectedTimes.isNotEmpty &&
-        _selectedDates.isNotEmpty;
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.m),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: AppButton(
-          text: '수정 완료',
-          onPressed: isValid ? _save : null,
-        ),
-      ),
-    );
-  }
-
-  String _getTypeEmoji(MedicationType type) {
-    switch (type) {
-      case MedicationType.oral:
-        return '💊';
-      case MedicationType.injection:
-        return '💉';
-      case MedicationType.suppository:
-        return '💠';
-      case MedicationType.patch:
-        return '🩹';
-    }
   }
 
   String _getTypeName(MedicationType type) {
@@ -1890,54 +1038,6 @@ class _MedicationEditScreenState extends State<_MedicationEditScreen> {
       case MedicationType.patch:
         return '한약';
     }
-  }
-
-  void _save() {
-    // 첫 번째 선택된 시간을 기본 시간으로
-    final sortedTimes = _selectedTimes.entries.toList()
-      ..sort((a, b) => a.key.index.compareTo(b.key.index));
-
-    final firstTime = sortedTimes.first.value.time;
-
-    // 여러 시간이면 timeText로 저장
-    String? timeText;
-    int totalQuantity = 0;
-
-    if (sortedTimes.length > 1) {
-      final timeStrings = sortedTimes.map((e) {
-        final t = e.value.time;
-        final period = t.hour < 12 ? '오전' : '오후';
-        final displayHour = t.hour == 0 ? 12 : (t.hour > 12 ? t.hour - 12 : t.hour);
-        return '$period $displayHour시';
-      }).toList();
-      timeText = timeStrings.join(', ');
-    }
-
-    for (final entry in sortedTimes) {
-      totalQuantity += entry.value.quantity;
-    }
-
-    // 선택된 날짜로 시작일/종료일 설정
-    DateTime startDate = DateTime.now();
-    DateTime endDate = DateTime.now().add(const Duration(days: 14));
-    if (_selectedDates.isNotEmpty) {
-      final sortedDates = _selectedDates.toList()..sort();
-      startDate = sortedDates.first;
-      endDate = sortedDates.last;
-    }
-
-    final updatedMed = ParsedMedication(
-      name: _nameController.text.trim(),
-      type: _selectedType,
-      quantity: totalQuantity,
-      time: firstTime,
-      timeText: timeText,
-      startDate: startDate,
-      endDate: endDate,
-    );
-    updatedMed.isSelected = widget.medication.isSelected;
-
-    Navigator.pop(context, updatedMed);
   }
 }
 

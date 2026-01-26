@@ -1,75 +1,50 @@
-/// 알림 설정 모델
+/// 알림 설정 모델 (단순 버전)
+/// - 소리: 없음 (무조건)
+/// - 진동: 항상 켜짐
+/// - 스누즈: 5분 간격, 최대 3회
 class NotificationSettings {
   final bool isEnabled; // 알림 받기
-  final bool preNotification; // 미리 알림
-  final int preNotificationMinutes; // 미리 알림 시간 (분)
-  final bool alarmStyle; // 알람 스타일 (끌 때까지 울림)
-  final bool repeatIfNotCompleted; // 미완료 시 재알림
-  final int repeatIntervalMinutes; // 재알림 간격 (분)
-  final double alarmVolume; // 알람 음량 (0.0 ~ 1.0)
+  final int repeatIntervalMinutes; // 스누즈 간격 (분)
 
   const NotificationSettings({
     this.isEnabled = true,
-    this.preNotification = true,
-    this.preNotificationMinutes = 10,
-    this.alarmStyle = true,
-    this.repeatIfNotCompleted = true,
-    this.repeatIntervalMinutes = 5, // 기본값 5분으로 변경
-    this.alarmVolume = 0.8,
+    this.repeatIntervalMinutes = 5, // 기본값 5분
   });
 
   /// 기본 설정
   static const NotificationSettings defaultSettings = NotificationSettings();
 
-  /// 미리 알림 시간 옵션
-  static const List<int> preNotificationOptions = [5, 10, 15, 30];
+  /// 스누즈 간격 옵션
+  static const List<int> repeatIntervalOptions = [3, 5, 10];
 
-  /// 재알림 간격 옵션
-  static const List<int> repeatIntervalOptions = [5, 10, 15, 30];
+  /// 자동 스누즈 타임아웃 (초)
+  static const int autoSnoozeTimeoutSeconds = 60; // 1분 방치 시 자동 스누즈
+
+  /// 최대 스누즈 횟수
+  static const int maxSnoozeCount = 3;
 
   NotificationSettings copyWith({
     bool? isEnabled,
-    bool? preNotification,
-    int? preNotificationMinutes,
-    bool? alarmStyle,
-    bool? repeatIfNotCompleted,
     int? repeatIntervalMinutes,
-    double? alarmVolume,
   }) {
     return NotificationSettings(
       isEnabled: isEnabled ?? this.isEnabled,
-      preNotification: preNotification ?? this.preNotification,
-      preNotificationMinutes:
-          preNotificationMinutes ?? this.preNotificationMinutes,
-      alarmStyle: alarmStyle ?? this.alarmStyle,
-      repeatIfNotCompleted: repeatIfNotCompleted ?? this.repeatIfNotCompleted,
       repeatIntervalMinutes:
           repeatIntervalMinutes ?? this.repeatIntervalMinutes,
-      alarmVolume: alarmVolume ?? this.alarmVolume,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'isEnabled': isEnabled,
-      'preNotification': preNotification,
-      'preNotificationMinutes': preNotificationMinutes,
-      'alarmStyle': alarmStyle,
-      'repeatIfNotCompleted': repeatIfNotCompleted,
       'repeatIntervalMinutes': repeatIntervalMinutes,
-      'alarmVolume': alarmVolume,
     };
   }
 
   factory NotificationSettings.fromJson(Map<String, dynamic> json) {
     return NotificationSettings(
       isEnabled: json['isEnabled'] as bool? ?? true,
-      preNotification: json['preNotification'] as bool? ?? true,
-      preNotificationMinutes: json['preNotificationMinutes'] as int? ?? 10,
-      alarmStyle: json['alarmStyle'] as bool? ?? true,
-      repeatIfNotCompleted: json['repeatIfNotCompleted'] as bool? ?? true,
       repeatIntervalMinutes: json['repeatIntervalMinutes'] as int? ?? 5,
-      alarmVolume: (json['alarmVolume'] as num?)?.toDouble() ?? 0.8,
     );
   }
 }
@@ -111,7 +86,7 @@ extension MedicationStatusExtension on MedicationStatus {
   }
 }
 
-/// 약물 복용 기록 (확장 버전)
+/// 약물 복용 기록
 class MedicationLogEntry {
   final String id;
   final String medicationId;

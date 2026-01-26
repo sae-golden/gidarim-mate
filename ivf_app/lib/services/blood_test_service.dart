@@ -79,4 +79,24 @@ class BloodTestService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_bloodTestsKey);
   }
+
+  /// 특정 날짜 범위의 피검사 기록 조회 (캘린더용)
+  static Future<List<BloodTest>> getBloodTestsByDateRange(
+    DateTime start,
+    DateTime end,
+  ) async {
+    final all = await getAllBloodTests();
+    return all.where((test) {
+      return test.date.isAfter(start.subtract(const Duration(days: 1))) &&
+          test.date.isBefore(end.add(const Duration(days: 1)));
+    }).toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+  }
+
+  /// 사이클에 연결되지 않은 피검사 기록 조회
+  static Future<List<BloodTest>> getOrphanBloodTests() async {
+    final all = await getAllBloodTests();
+    return all.where((test) => test.cycleId.isEmpty).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+  }
 }

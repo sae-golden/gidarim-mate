@@ -10,20 +10,29 @@ import 'app_button.dart';
 /// 기획서에 맞춘 UI: 시술 종류 선택, 차수 선택, 옵션 체크박스
 class NewCycleBottomSheet extends StatefulWidget {
   final TreatmentType? initialType;
+  final bool isFirstCycle; // 첫 사이클 설정인지 여부
 
-  const NewCycleBottomSheet({super.key, this.initialType});
+  const NewCycleBottomSheet({
+    super.key,
+    this.initialType,
+    this.isFirstCycle = false,
+  });
 
   /// 바텀시트 표시 후 결과 반환
   /// 반환값: TreatmentCycle (새 사이클) 또는 null (취소)
   static Future<TreatmentCycle?> show(
     BuildContext context, {
     TreatmentType? initialType,
+    bool isFirstCycle = false,
   }) {
     return showModalBottomSheet<TreatmentCycle>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => NewCycleBottomSheet(initialType: initialType),
+      builder: (context) => NewCycleBottomSheet(
+        initialType: initialType,
+        isFirstCycle: isFirstCycle,
+      ),
     );
   }
 
@@ -39,11 +48,13 @@ class _NewCycleBottomSheetState extends State<NewCycleBottomSheet> {
   bool _isLoading = true;
   int _suggestedIvfNumber = 1;
   int _suggestedIuiNumber = 1;
+  late DateTime _startDate; // 시작일
 
   @override
   void initState() {
     super.initState();
     _selectedType = widget.initialType ?? TreatmentType.ivf;
+    _startDate = DateTime.now(); // 기본값: 오늘
     _loadSuggestedNumbers();
   }
 
@@ -95,7 +106,7 @@ class _NewCycleBottomSheetState extends State<NewCycleBottomSheet> {
 
             // 제목
             Text(
-              '어떤 시술을 시작하시나요?',
+              widget.isFirstCycle ? '시술 정보 설정' : '어떤 시술을 시작하시나요?',
               style: AppTextStyles.h3.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: AppSpacing.l),
@@ -110,7 +121,15 @@ class _NewCycleBottomSheetState extends State<NewCycleBottomSheet> {
 
             // 옵션 체크박스
             _buildOptionCheckbox(),
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.m),
+
+            // 시작일 선택 (첫 사이클일 때만 표시)
+            if (widget.isFirstCycle) ...[
+              _buildStartDateSelector(),
+              const SizedBox(height: AppSpacing.m),
+            ],
+
+            const SizedBox(height: AppSpacing.l),
 
             // 버튼들
             Row(
@@ -133,7 +152,7 @@ class _NewCycleBottomSheetState extends State<NewCycleBottomSheet> {
                 Expanded(
                   flex: 2,
                   child: AppButton(
-                    text: '시작',
+                    text: widget.isFirstCycle ? '저장' : '시작',
                     onPressed: _isLoading ? null : _handleStart,
                     width: double.infinity,
                   ),
@@ -375,12 +394,84 @@ class _NewCycleBottomSheetState extends State<NewCycleBottomSheet> {
     );
   }
 
+  /// 시작일 선택
+  Widget _buildStartDateSelector() {
+    final dateText = '${_startDate.year}.${_startDate.month.toString().padLeft(2, '0')}.${_startDate.day.toString().padLeft(2, '0')}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '시작일',
+          style: AppTextStyles.body.copyWith(
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.s),
+        GestureDetector(
+          onTap: _selectStartDate,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.m,
+              vertical: AppSpacing.m,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(dateText, style: AppTextStyles.body),
+                Icon(Icons.calendar_today, color: AppColors.textSecondary, size: 20),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _selectStartDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 1, 12, 31),
+      locale: const Locale('ko', 'KR'),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: AppColors.primaryPurple,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: AppColors.textPrimary,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _startDate = picked;
+      });
+    }
+  }
+
   Future<void> _handleStart() async {
     final newCycle = await SimpleTreatmentService.startNewCycle(
       type: _selectedType,
       cycleNumber: _selectedCycleNumber,
       isNaturalCycle: _isNaturalCycle,
       isFrozenTransfer: _isFrozenTransfer,
+      startDate: widget.isFirstCycle ? _startDate : null,
     );
 
     if (mounted) {

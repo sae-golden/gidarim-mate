@@ -151,6 +151,20 @@ extension MedicationTypeNotification on MedicationType {
         return '아직 한약 먹지 않으셨어요';
     }
   }
+
+  /// 알림 본문 동사 (복용하세요 등)
+  String get actionVerb {
+    switch (this) {
+      case MedicationType.injection:
+        return '맞을 시간이에요';
+      case MedicationType.oral:
+        return '드실 시간이에요';
+      case MedicationType.suppository:
+        return '사용할 시간이에요';
+      case MedicationType.patch:
+        return '드실 시간이에요';
+    }
+  }
 }
 
 /// 약물 복용 기록

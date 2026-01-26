@@ -38,16 +38,10 @@ class NotificationSettingsService {
     await saveSettings(settings.copyWith(isEnabled: enabled));
   }
 
-  /// 알람 스타일 활성화 여부 업데이트
-  static Future<void> setAlarmStyle(bool enabled) async {
+  /// 스누즈 간격 업데이트
+  static Future<void> setRepeatInterval(int minutes) async {
     final settings = await getSettings();
-    await saveSettings(settings.copyWith(alarmStyle: enabled));
-  }
-
-  /// 미완료 시 재알림 활성화 여부 업데이트
-  static Future<void> setRepeatIfNotCompleted(bool enabled) async {
-    final settings = await getSettings();
-    await saveSettings(settings.copyWith(repeatIfNotCompleted: enabled));
+    await saveSettings(settings.copyWith(repeatIntervalMinutes: minutes));
   }
 
   /// 마지막 주사 부위 조회

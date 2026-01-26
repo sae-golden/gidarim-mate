@@ -57,6 +57,8 @@ class _BloodTestBottomSheetState extends State<BloodTestBottomSheet> {
   late DateTime _selectedDate;
   final Set<BloodTestType> _selectedTypes = {};
   final Map<BloodTestType, TextEditingController> _controllers = {};
+  final Map<BloodTestType, FocusNode> _focusNodes = {};
+  final Map<BloodTestType, GlobalKey> _itemKeys = {};
 
   bool get isEditing => widget.existingTest != null;
 
@@ -65,9 +67,12 @@ class _BloodTestBottomSheetState extends State<BloodTestBottomSheet> {
     super.initState();
     _selectedDate = widget.existingTest?.date ?? DateTime.now();
 
-    // 컨트롤러 초기화
+    // 컨트롤러, 포커스 노드, 키 초기화
     for (var type in BloodTestType.values) {
       _controllers[type] = TextEditingController();
+      _focusNodes[type] = FocusNode();
+      _focusNodes[type]!.addListener(() => _onFocusChange(type));
+      _itemKeys[type] = GlobalKey();
     }
 
     // 기존 데이터 로드
@@ -108,127 +113,155 @@ class _BloodTestBottomSheetState extends State<BloodTestBottomSheet> {
     }
   }
 
+  void _onFocusChange(BloodTestType type) {
+    if (_focusNodes[type]?.hasFocus == true) {
+      // 약간의 딜레이 후 해당 항목이 보이도록 스크롤
+      Future.delayed(const Duration(milliseconds: 300), () {
+        final key = _itemKeys[type];
+        if (key?.currentContext != null) {
+          Scrollable.ensureVisible(
+            key!.currentContext!,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            alignment: 0.5,
+          );
+        }
+      });
+    }
+  }
+
   @override
   void dispose() {
     for (var controller in _controllers.values) {
       controller.dispose();
+    }
+    for (var focusNode in _focusNodes.values) {
+      focusNode.dispose();
     }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.85,
-      ),
-      padding: EdgeInsets.only(
-        left: AppSpacing.l,
-        right: AppSpacing.l,
-        top: AppSpacing.l,
-        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.l,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 핸들
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.l),
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    final hasKeyboard = keyboardHeight > 0;
 
-          // 제목
-          Row(
+    return DraggableScrollableSheet(
+      initialChildSize: hasKeyboard ? 0.95 : 0.7,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppColors.cardBackground,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
             children: [
-              const Text('📋', style: TextStyle(fontSize: 24)),
-              const SizedBox(width: AppSpacing.s),
-              Text(
-                '피검사 기록',
-                style: AppTextStyles.h3.copyWith(fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.l),
-
-          // 날짜 선택
-          _buildDateSelector(),
-          const SizedBox(height: AppSpacing.m),
-
-          // 안내 문구
-          Text(
-            '어떤 수치를 기록할까요?',
-            style: AppTextStyles.body.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          Text(
-            '해당하는 항목을 선택하세요',
-            style: AppTextStyles.caption.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.m),
-
-          // 수치 항목들
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: BloodTestType.values
-                    .map((type) => _buildTestItem(type))
-                    .toList(),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: AppSpacing.l),
-
-          // 버튼들
-          Row(
-            children: [
-              // 삭제 버튼 (편집 모드일 때만)
-              if (isEditing) ...[
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _showDeleteConfirm,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red),
-                      padding:
-                          const EdgeInsets.symmetric(vertical: AppSpacing.m),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+              // 핸들 (항상 고정)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.l),
+                child: Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(2),
                     ),
-                    child: const Text('삭제'),
                   ),
                 ),
-                const SizedBox(width: AppSpacing.m),
-              ],
-              // 저장 버튼
+              ),
+
+              // 스크롤 가능 영역
               Expanded(
-                flex: isEditing ? 2 : 1,
-                child: AppButton(
-                  text: '저장',
-                  onPressed: _selectedTypes.isEmpty ? null : _handleSave,
-                  width: double.infinity,
+                child: ListView(
+                  controller: scrollController,
+                  padding: EdgeInsets.only(
+                    left: AppSpacing.l,
+                    right: AppSpacing.l,
+                    top: AppSpacing.l,
+                    bottom: keyboardHeight + AppSpacing.l,
+                  ),
+                  children: [
+                    // 제목
+                    Row(
+                      children: [
+                        const Text('📋', style: TextStyle(fontSize: 24)),
+                        const SizedBox(width: AppSpacing.s),
+                        Text(
+                          '피검사 기록',
+                          style: AppTextStyles.h3.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.l),
+
+                    // 날짜 선택
+                    _buildDateSelector(),
+                    const SizedBox(height: AppSpacing.m),
+
+                    // 안내 문구
+                    Text(
+                      '어떤 수치를 기록할까요?',
+                      style: AppTextStyles.body.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      '해당하는 항목을 선택하세요',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.m),
+
+                    // 수치 항목들
+                    ...BloodTestType.values.map((type) => _buildTestItem(type)),
+
+                    const SizedBox(height: AppSpacing.l),
+
+                    // 버튼들
+                    Row(
+                      children: [
+                        // 삭제 버튼 (편집 모드일 때만)
+                        if (isEditing) ...[
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: _showDeleteConfirm,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red,
+                                side: const BorderSide(color: Colors.red),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: AppSpacing.m),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text('삭제'),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.m),
+                        ],
+                        // 저장 버튼
+                        Expanded(
+                          flex: isEditing ? 2 : 1,
+                          child: AppButton(
+                            text: '저장',
+                            onPressed: _selectedTypes.isEmpty ? null : _handleSave,
+                            width: double.infinity,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -281,6 +314,7 @@ class _BloodTestBottomSheetState extends State<BloodTestBottomSheet> {
     final isSelected = _selectedTypes.contains(type);
 
     return Container(
+      key: _itemKeys[type],
       margin: const EdgeInsets.only(bottom: AppSpacing.s),
       decoration: BoxDecoration(
         color: isSelected ? AppColors.primaryPurpleLight : AppColors.background,
@@ -361,6 +395,7 @@ class _BloodTestBottomSheetState extends State<BloodTestBottomSheet> {
               ),
               child: TextField(
                 controller: _controllers[type],
+                focusNode: _focusNodes[type],
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [
