@@ -233,18 +233,20 @@ class _IVFAppState extends State<IVFApp> {
 
       debugPrint('💉 주사 완료: $medicationName ($selectedSide)');
 
-      // 모달 닫힘 후 약간의 딜레이 후 컨페티 표시
-      await Future.delayed(const Duration(milliseconds: 100));
-
-      // 컨페티 표시 (context 재확인)
-      final confettiContext = navigatorKey.currentContext;
-      if (confettiContext != null && mounted) {
-        CompletionOverlay.show(
-          confettiContext,
-          medicationName: medicationName,
-          isInjection: true,
-        );
-      }
+      // 프레임 렌더링 완료 후 컨페티 표시 (바텀시트 닫힘 보장)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final confettiContext = navigatorKey.currentContext;
+        if (confettiContext != null && mounted) {
+          debugPrint('🎉 컨페티 표시 시도: $medicationName');
+          CompletionOverlay.show(
+            confettiContext,
+            medicationName: medicationName,
+            isInjection: true,
+          );
+        } else {
+          debugPrint('❌ 컨페티 표시 실패: context=$confettiContext, mounted=$mounted');
+        }
+      });
     }
   }
 

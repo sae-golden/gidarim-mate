@@ -157,7 +157,7 @@ class EncouragementMessages {
     return injectionMessages[index];
   }
 
-  /// 약물 복용 응원 문구
+  /// 약물 복용 응원 문구 (일반)
   static const List<String> medicationMessages = [
     '오늘도 잘 챙겨 먹었어요',
     '꾸준함이 가장 중요해요',
@@ -171,5 +171,23 @@ class EncouragementMessages {
     final index =
         DateTime.now().millisecondsSinceEpoch % medicationMessages.length;
     return medicationMessages[index];
+  }
+
+  /// 알약/한약/질정용 응원 문구
+  static const List<String> oralMessages = [
+    '오늘도 잊지 않고 복용 완료!',
+    '꾸준함이 기적을 만들어요',
+    '잘 챙겨 먹었어요!',
+    '오늘도 한 걸음 더 가까워졌어요',
+    '매일 챙기는 당신이 멋져요',
+    '작은 습관이 큰 결과를 만들어요',
+    '오늘도 잘하고 있어요!',
+  ];
+
+  /// 알약/한약/질정용 응원 문구 가져오기
+  static String getOralMessage() {
+    final index =
+        DateTime.now().millisecondsSinceEpoch % oralMessages.length;
+    return oralMessages[index];
   }
 }

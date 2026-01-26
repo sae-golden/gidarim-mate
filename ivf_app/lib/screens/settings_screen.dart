@@ -12,6 +12,10 @@ import '../widgets/app_card.dart';
 import '../services/notification_settings_service.dart';
 import '../services/medication_storage_service.dart';
 import '../services/backup_service.dart';
+import '../services/additional_record_service.dart';
+import '../services/simple_treatment_service.dart';
+import '../services/blood_test_service.dart';
+import '../services/hospital_service.dart';
 import '../models/notification_settings.dart' as settings_model;
 import 'hospital_info_screen.dart';
 import 'app_info_screen.dart';
@@ -370,7 +374,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _showDeleteLocalDataDialog() async {
     final confirmed = await ConfirmBottomSheet.show(
       context,
-      message: '모든 약물 데이터를 삭제할까요?\n\n이 작업은 되돌릴 수 없습니다.',
+      message: '모든 데이터를 삭제할까요?\n\n• 약물 및 복용 기록\n• 시술 기록 (과배란, 채취, 이식, 동결)\n• 검사 기록 (피검사, 초음파, 임신 테스트)\n• 일상 기록 (몸 상태, 생리)\n• 병원 예약\n• 시도 정보 (1차/2차 시험관 등)\n\n이 작업은 되돌릴 수 없습니다.',
       confirmText: '삭제',
       cancelText: '취소',
     );
@@ -382,15 +386,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _deleteLocalData() async {
     try {
+      // 약물 데이터 초기화
       await MedicationStorageService.clearAllMedications();
+
+      // 치료 사이클 데이터 초기화 (시술 기록, 시도 정보)
+      await SimpleTreatmentService.clearAllData();
+
+      // 추가 기록 초기화 (생리, 초음파, 임신테스트, 몸상태, 병원예약)
+      await AdditionalRecordService.clearAllData();
+
+      // 피검사 기록 초기화
+      await BloodTestService.clearAllData();
+
+      // 병원 정보 초기화
+      await HospitalService.clearUserHospitalInfo();
+
+      // 모든 알림 취소
+      await NotificationService.cancelAllNotifications();
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('데이터가 초기화되었습니다'),
+            content: const Text('모든 데이터가 초기화되었습니다'),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
+        );
+
+        // 메인 화면으로 이동하여 앱 새로고침
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainScreen()),
+          (route) => false,
         );
       }
     } catch (e) {

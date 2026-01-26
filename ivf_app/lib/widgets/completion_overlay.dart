@@ -23,9 +23,10 @@ class CompletionOverlay {
 
     _onDismissCallback = onDismissed;
 
+    // 약물 종류에 따라 랜덤 격려 문구 선택
     final message = isInjection
         ? EncouragementMessages.getInjectionMessage()
-        : EncouragementMessages.getMedicationMessage();
+        : EncouragementMessages.getOralMessage();
 
     _currentOverlay = OverlayEntry(
       builder: (context) => _CompletionOverlayWidget(
@@ -215,104 +216,72 @@ class _CompletionOverlayWidgetState extends State<_CompletionOverlayWidget>
   }
 
   Widget _buildContent() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 32),
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryPurple.withValues(alpha: 0.3),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 이모지 아이콘
-          Container(
-            width: 90,
-            height: 90,
-            decoration: BoxDecoration(
-              color: AppColors.primaryPurple,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryPurple.withValues(alpha: 0.4),
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Center(
-              child: widget.isInjection
-                  ? const Text('💉', style: TextStyle(fontSize: 44))
-                  : const Icon(Icons.check, color: Colors.white, size: 52),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // 메인 메시지
-          Text(
-            widget.isInjection ? '용감하게 잘 맞았어요!' : '복용 완료!',
-            style: AppTextStyles.h2.copyWith(
-              color: AppColors.primaryPurple,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          // 서브 메시지
-          Text(
-            '오늘도 수고했어요 💜',
-            style: AppTextStyles.body.copyWith(
-              color: AppColors.textSecondary,
-              fontSize: 16,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 6),
-
-          // 약물 이름
-          Text(
-            widget.medicationName,
-            style: AppTextStyles.caption.copyWith(
-              color: AppColors.textDisabled,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 20),
-
-          // 응원 메시지
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            decoration: BoxDecoration(
-              color: AppColors.primaryPurpleLight.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              widget.message,
-              style: AppTextStyles.body.copyWith(
-                color: AppColors.primaryPurple,
-                fontWeight: FontWeight.w500,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 초록색 원형 체크 아이콘
+        Container(
+          width: 100,
+          height: 100,
+          decoration: BoxDecoration(
+            color: AppColors.success,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.success.withValues(alpha: 0.4),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
               ),
-              textAlign: TextAlign.center,
-            ),
+            ],
           ),
-          const SizedBox(height: 24),
+          child: const Center(
+            child: Icon(Icons.check, color: Colors.white, size: 56),
+          ),
+        ),
+        const SizedBox(height: 32),
 
-          // 안내 텍스트
-          Text(
-            '화면을 탭하면 닫힙니다',
-            style: AppTextStyles.caption.copyWith(
-              color: AppColors.textDisabled,
-            ),
+        // 메인 메시지 (랜덤 격려 문구)
+        Text(
+          widget.message,
+          style: AppTextStyles.h1.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 24,
           ),
-        ],
-      ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 12),
+
+        // 서브 메시지
+        Text(
+          '오늘도 수고했어요 💜',
+          style: AppTextStyles.body.copyWith(
+            color: Colors.white.withValues(alpha: 0.9),
+            fontSize: 18,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+
+        // 약물 이름
+        Text(
+          widget.medicationName,
+          style: AppTextStyles.body.copyWith(
+            color: Colors.white.withValues(alpha: 0.7),
+            fontSize: 15,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 48),
+
+        // 안내 텍스트
+        Text(
+          '화면을 탭하면 닫힙니다',
+          style: AppTextStyles.caption.copyWith(
+            color: Colors.white.withValues(alpha: 0.5),
+          ),
+        ),
+      ],
     );
   }
 }

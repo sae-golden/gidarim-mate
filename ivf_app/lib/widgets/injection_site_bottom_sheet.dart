@@ -142,68 +142,20 @@ class _InjectionSiteBottomSheetState extends State<InjectionSiteBottomSheet> {
           ),
           const SizedBox(height: AppSpacing.xs),
 
-          // 질문
+          // 안내 문구 (부제 위치)
           Text(
-            '어디에 맞았나요?',
+            widget.lastSide != null
+                ? '최근에 ${widget.lastSide == 'left' ? '왼쪽' : '오른쪽'}에 맞았어요. 오늘은 ${_recommendedSide == 'left' ? '왼쪽' : '오른쪽'}! ⭐'
+                : '처음이시네요! 편한 쪽을 선택해주세요',
             style: AppTextStyles.body.copyWith(
               color: AppColors.textSecondary,
             ),
           ),
           const SizedBox(height: AppSpacing.l),
 
-          // 새로운 부위 선택 그리드
+          // 부위 선택 그리드
           _buildNewSiteSelector(),
 
-          // 추천 안내 메시지
-          const SizedBox(height: AppSpacing.s),
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.m),
-            decoration: BoxDecoration(
-              color: AppColors.primaryPurpleLight.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.lightbulb_outline,
-                  color: AppColors.primaryPurple,
-                  size: 20,
-                ),
-                const SizedBox(width: AppSpacing.s),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (widget.lastSide != null) ...[
-                        Text(
-                          '최근에 ${widget.lastSide == 'left' ? '왼쪽' : '오른쪽'}에 맞았어요',
-                          style: AppTextStyles.caption.copyWith(
-                            color: AppColors.primaryPurple,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '오늘은 ${_recommendedSide == 'left' ? '왼쪽' : '오른쪽'}을 추천해요! ⭐',
-                          style: AppTextStyles.body.copyWith(
-                            color: AppColors.primaryPurple,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ] else ...[
-                        Text(
-                          '처음이시네요! 편한 쪽을 선택해주세요 ⭐',
-                          style: AppTextStyles.body.copyWith(
-                            color: AppColors.primaryPurple,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: AppSpacing.xl),
 
           // 저장 버튼

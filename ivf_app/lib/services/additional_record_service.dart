@@ -499,6 +499,22 @@ class AdditionalRecordService {
     return result;
   }
 
+  /// 모든 데이터 초기화
+  static Future<void> clearAllData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_periodRecordsKey);
+      await prefs.remove(_ultrasoundRecordsKey);
+      await prefs.remove(_pregnancyTestRecordsKey);
+      await prefs.remove(_conditionRecordsKey);
+      await prefs.remove(_hospitalVisitRecordsKey);
+      debugPrint('✅ AdditionalRecordService: 모든 데이터 초기화 완료');
+    } catch (e) {
+      debugPrint('❌ AdditionalRecordService: 데이터 초기화 오류: $e');
+      rethrow;
+    }
+  }
+
   /// 특정 날짜 범위의 모든 기록 날짜 조회 (캘린더 마커용)
   static Future<Map<DateTime, Set<RecordType>>> getRecordDatesByRange(
     DateTime start,

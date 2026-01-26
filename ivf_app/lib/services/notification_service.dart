@@ -246,15 +246,14 @@ class NotificationService {
       'isSnooze': isSnooze,
     });
 
-    // Android 알림 상세 설정
+    // Android 알림 상세 설정 (일반 푸시 알림만, 풀스크린 없음)
     final androidDetails = AndroidNotificationDetails(
       'medication_channel',
       '약물 알림',
       channelDescription: '약물 복용 알림',
       importance: Importance.high,
       priority: Priority.high,
-      fullScreenIntent: true,
-      category: AndroidNotificationCategory.alarm,
+      // fullScreenIntent 제거 - 일반 푸시 알림만 사용
       actions: [
         AndroidNotificationAction(
           NotificationActions.complete,
