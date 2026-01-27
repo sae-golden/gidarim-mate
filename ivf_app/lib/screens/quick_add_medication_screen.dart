@@ -1015,32 +1015,27 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
               final isToday = DateTime.now().year == date.year &&
                   DateTime.now().month == date.month &&
                   DateTime.now().day == date.day;
-              final isPast = date.isBefore(DateTime.now().subtract(const Duration(days: 1)));
-
               return GestureDetector(
-                onTap: isPast
-                    ? null
-                    : () {
-                        setState(() {
-                          _datePattern = QuickDatePattern.custom;
-                          if (isSelected) {
-                            _selectedDates.removeWhere(
-                              (d) => d.year == date.year && d.month == date.month && d.day == date.day,
-                            );
-                          } else {
-                            _selectedDates.add(date);
-                          }
-                        });
-                      },
+                onTap: () {
+                  setState(() {
+                    _datePattern = QuickDatePattern.custom;
+                    if (isSelected) {
+                      _selectedDates.removeWhere(
+                        (d) => d.year == date.year && d.month == date.month && d.day == date.day,
+                      );
+                    } else {
+                      _selectedDates.add(date);
+                    }
+                  });
+                },
                 child: Container(
                   margin: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
-                    // 선택됨: 채워진 원, 미선택: 테두리만 있는 원
                     color: isSelected
                         ? AppColors.primaryPurple
                         : null,
                     shape: BoxShape.circle,
-                    border: !isSelected && !isPast
+                    border: !isSelected
                         ? Border.all(
                             color: isToday
                                 ? AppColors.primaryPurple
@@ -1055,11 +1050,9 @@ class _QuickAddMedicationScreenState extends State<QuickAddMedicationScreen> {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: isSelected || isToday ? FontWeight.w600 : null,
-                        color: isPast
-                            ? AppColors.textDisabled
-                            : isSelected
-                                ? Colors.white
-                                : AppColors.textPrimary,
+                        color: isSelected
+                            ? Colors.white
+                            : AppColors.textPrimary,
                       ),
                     ),
                   ),

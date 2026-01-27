@@ -138,56 +138,29 @@ class EncouragementMessages {
     '좋은 결과를 믿어요',
   ];
 
-  /// 주사 관련 특별 응원 문구
-  static const List<String> injectionMessages = [
-    '따끔하지만 금방 지나가요',
-    '주사 맞는 것도 사랑이에요',
-    '아프지만 잘 참고 있어요',
-    '오늘 주사도 무사히 끝!',
-    '용감하게 잘 맞았어요',
-    '조금만 참으면 돼요',
-    '아기를 위한 사랑의 주사예요',
-    '주사 한 번이 기적에 한 걸음이에요',
-  ];
-
-  /// 주사 응원 문구 가져오기
-  static String getInjectionMessage() {
-    final index =
-        DateTime.now().millisecondsSinceEpoch % injectionMessages.length;
-    return injectionMessages[index];
-  }
-
-  /// 약물 복용 응원 문구 (일반)
-  static const List<String> medicationMessages = [
-    '오늘도 잘 챙겨 먹었어요',
-    '꾸준함이 가장 중요해요',
-    '잊지 않고 챙기는 당신이 대단해요',
-    '매일 같은 시간, 잘하고 있어요',
-    '건강을 위한 한 알이에요',
-  ];
-
-  /// 약물 복용 응원 문구 가져오기
-  static String getMedicationMessage() {
-    final index =
-        DateTime.now().millisecondsSinceEpoch % medicationMessages.length;
-    return medicationMessages[index];
-  }
-
-  /// 알약/한약/질정용 응원 문구
-  static const List<String> oralMessages = [
-    '오늘도 잊지 않고 복용 완료!',
+  /// 공통 완료 응원 문구 (모든 투여 방식에 사용)
+  static const List<String> completionMessages = [
+    '오늘도 잘 해냈어요!',
     '꾸준함이 기적을 만들어요',
-    '잘 챙겨 먹었어요!',
     '오늘도 한 걸음 더 가까워졌어요',
-    '매일 챙기는 당신이 멋져요',
+    '잊지 않고 챙기는 당신이 멋져요',
     '작은 습관이 큰 결과를 만들어요',
     '오늘도 잘하고 있어요!',
+    '꾸준히 해내는 당신이 대단해요',
+    '매일 같은 시간, 잘하고 있어요',
+    '오늘도 무사히 완료!',
+    '한 걸음씩 나아가고 있어요',
   ];
 
-  /// 알약/한약/질정용 응원 문구 가져오기
-  static String getOralMessage() {
+  /// 공통 완료 응원 문구 가져오기
+  static String getCompletionMessage() {
     final index =
-        DateTime.now().millisecondsSinceEpoch % oralMessages.length;
-    return oralMessages[index];
+        DateTime.now().millisecondsSinceEpoch % completionMessages.length;
+    return completionMessages[index];
   }
+
+  /// 하위 호환용 (기존 호출부 지원)
+  static String getInjectionMessage() => getCompletionMessage();
+  static String getOralMessage() => getCompletionMessage();
+  static String getMedicationMessage() => getCompletionMessage();
 }
