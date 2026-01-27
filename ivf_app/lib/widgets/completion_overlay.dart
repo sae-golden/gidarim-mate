@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
@@ -12,8 +13,53 @@ class CompletionOverlay {
 
   /// 복용 완료 오버레이 표시
   /// [onDismissed] 콜백은 오버레이가 닫힌 후 호출됨
-  static void show(
+  /// 반환값: true면 성공적으로 표시됨, false면 실패
+  static bool show(
     BuildContext context, {
+    required String medicationName,
+    bool isInjection = false,
+    VoidCallback? onDismissed,
+  }) {
+    // 기존 오버레이가 있으면 제거
+    hide();
+
+    // Overlay가 있는지 먼저 확인
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) {
+      debugPrint('❌ CompletionOverlay: Overlay를 찾을 수 없음');
+      return false;
+    }
+
+    _onDismissCallback = onDismissed;
+
+    // 약물 종류에 따라 랜덤 격려 문구 선택
+    final message = isInjection
+        ? EncouragementMessages.getInjectionMessage()
+        : EncouragementMessages.getOralMessage();
+
+    _currentOverlay = OverlayEntry(
+      builder: (context) => _CompletionOverlayWidget(
+        medicationName: medicationName,
+        message: message,
+        isInjection: isInjection,
+        onDismiss: _hideAndCallback,
+      ),
+    );
+
+    try {
+      overlay.insert(_currentOverlay!);
+      return true;
+    } catch (e) {
+      debugPrint('❌ CompletionOverlay 삽입 실패: $e');
+      _currentOverlay = null;
+      return false;
+    }
+  }
+
+  /// OverlayState를 직접 사용하여 오버레이 표시
+  /// Navigator.overlay를 직접 전달받아 사용
+  static bool showWithOverlay(
+    OverlayState overlay, {
     required String medicationName,
     bool isInjection = false,
     VoidCallback? onDismissed,
@@ -37,22 +83,39 @@ class CompletionOverlay {
       ),
     );
 
-    Overlay.of(context).insert(_currentOverlay!);
+    try {
+      overlay.insert(_currentOverlay!);
+      return true;
+    } catch (e) {
+      debugPrint('❌ CompletionOverlay 삽입 실패: $e');
+      _currentOverlay = null;
+      return false;
+    }
   }
 
   /// 오버레이 숨기기 및 콜백 호출
   static void _hideAndCallback() {
-    _currentOverlay?.remove();
-    _currentOverlay = null;
+    _safeRemoveOverlay();
     _onDismissCallback?.call();
     _onDismissCallback = null;
   }
 
   /// 오버레이 숨기기
   static void hide() {
-    _currentOverlay?.remove();
-    _currentOverlay = null;
+    _safeRemoveOverlay();
     _onDismissCallback = null;
+  }
+
+  /// 안전하게 오버레이 제거 (mounted 확인)
+  static void _safeRemoveOverlay() {
+    try {
+      if (_currentOverlay != null && _currentOverlay!.mounted) {
+        _currentOverlay!.remove();
+      }
+    } catch (e) {
+      // 오버레이 제거 실패 시 무시
+    }
+    _currentOverlay = null;
   }
 }
 

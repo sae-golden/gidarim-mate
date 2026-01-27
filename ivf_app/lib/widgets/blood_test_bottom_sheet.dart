@@ -143,125 +143,142 @@ class _BloodTestBottomSheetState extends State<BloodTestBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
-    final hasKeyboard = keyboardHeight > 0;
+    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
+    final hasKeyboard = bottomPadding > 0;
 
-    return DraggableScrollableSheet(
-      initialChildSize: hasKeyboard ? 0.95 : 0.7,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      expand: false,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.cardBackground,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              // 핸들 (항상 고정)
-              Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.l),
-                child: Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 핸들 (항상 고정)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.l),
+            child: Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-
-              // 스크롤 가능 영역
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: EdgeInsets.only(
-                    left: AppSpacing.l,
-                    right: AppSpacing.l,
-                    top: AppSpacing.l,
-                    bottom: keyboardHeight + AppSpacing.l,
-                  ),
-                  children: [
-                    // 제목
-                    Row(
-                      children: [
-                        const Text('📋', style: TextStyle(fontSize: 24)),
-                        const SizedBox(width: AppSpacing.s),
-                        Text(
-                          '피검사 기록',
-                          style: AppTextStyles.h3.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.l),
-
-                    // 날짜 선택
-                    _buildDateSelector(),
-                    const SizedBox(height: AppSpacing.m),
-
-                    // 안내 문구
-                    Text(
-                      '어떤 수치를 기록할까요?',
-                      style: AppTextStyles.body.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      '해당하는 항목을 선택하세요',
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.m),
-
-                    // 수치 항목들
-                    ...BloodTestType.values.map((type) => _buildTestItem(type)),
-
-                    const SizedBox(height: AppSpacing.l),
-
-                    // 버튼들
-                    Row(
-                      children: [
-                        // 삭제 버튼 (편집 모드일 때만)
-                        if (isEditing) ...[
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: _showDeleteConfirm,
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.red,
-                                side: const BorderSide(color: Colors.red),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: AppSpacing.m),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: const Text('삭제'),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.m),
-                        ],
-                        // 저장 버튼
-                        Expanded(
-                          flex: isEditing ? 2 : 1,
-                          child: AppButton(
-                            text: '저장',
-                            onPressed: _selectedTypes.isEmpty ? null : _handleSave,
-                            width: double.infinity,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
-        );
-      },
+
+          // 스크롤 가능 영역 (버튼 제외)
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(
+                left: AppSpacing.l,
+                right: AppSpacing.l,
+                top: AppSpacing.l,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 제목
+                  Row(
+                    children: [
+                      const Text('📋', style: TextStyle(fontSize: 24)),
+                      const SizedBox(width: AppSpacing.s),
+                      Text(
+                        '피검사 기록',
+                        style: AppTextStyles.h3.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.l),
+
+                  // 날짜 선택
+                  _buildDateSelector(),
+                  const SizedBox(height: AppSpacing.m),
+
+                  // 안내 문구
+                  Text(
+                    '어떤 수치를 기록할까요?',
+                    style: AppTextStyles.body.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    '해당하는 항목을 선택하세요',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.m),
+
+                  // 수치 항목들
+                  ...BloodTestType.values.map((type) => _buildTestItem(type)),
+
+                  const SizedBox(height: AppSpacing.m),
+                ],
+              ),
+            ),
+          ),
+
+          // 버튼들 (스크롤 밖에 고정, 키보드 위에 표시)
+          Container(
+            padding: EdgeInsets.only(
+              left: AppSpacing.l,
+              right: AppSpacing.l,
+              top: AppSpacing.m,
+              bottom: hasKeyboard ? bottomPadding + AppSpacing.m : AppSpacing.l,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              boxShadow: hasKeyboard
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 4,
+                        offset: const Offset(0, -2),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              children: [
+                // 삭제 버튼 (편집 모드일 때만)
+                if (isEditing) ...[
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _showDeleteConfirm,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: const BorderSide(color: Colors.red),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: AppSpacing.m),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('삭제'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.m),
+                ],
+                // 저장 버튼
+                Expanded(
+                  flex: isEditing ? 2 : 1,
+                  child: AppButton(
+                    text: '저장',
+                    onPressed: _selectedTypes.isEmpty ? null : _handleSave,
+                    width: double.infinity,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

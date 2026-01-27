@@ -1,8 +1,20 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // Firebase
+    id("com.google.gms.google-services")
+}
+
+// key.properties 파일 로드
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
 android {
@@ -31,22 +43,19 @@ android {
         versionName = flutter.versionName
     }
 
-    // release 서명 설정 (keystore 파일 필요)
+    // release 서명 설정
     signingConfigs {
         create("release") {
-            // key.properties 파일에서 읽어오도록 설정 필요
-            // storeFile = file("upload-keystore.jks")
-            // storePassword = "YOUR_STORE_PASSWORD"
-            // keyAlias = "upload"
-            // keyPassword = "YOUR_KEY_PASSWORD"
+            storeFile = file(keystoreProperties["storeFile"] as String? ?: "upload-keystore.jks")
+            storePassword = keystoreProperties["storePassword"] as String? ?: ""
+            keyAlias = keystoreProperties["keyAlias"] as String? ?: ""
+            keyPassword = keystoreProperties["keyPassword"] as String? ?: ""
         }
     }
 
     buildTypes {
         release {
-            // TODO: release 서명 설정 후 아래 줄의 주석을 해제하세요
-            // signingConfig = signingConfigs.getByName("release")
-            signingConfig = signingConfigs.getByName("debug") // 임시: 테스트용
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

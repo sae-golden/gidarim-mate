@@ -47,24 +47,8 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "showFullScreenNotification" -> {
-                    val notificationId = call.argument<Int>("notificationId") ?: 0
-                    val title = call.argument<String>("title") ?: "약물 알림"
-                    val message = call.argument<String>("message") ?: ""
-                    val medicationId = call.argument<String>("medicationId")
-                    val medicationName = call.argument<String>("medicationName")
-                    val medicationType = call.argument<String>("medicationType")
-
-                    Log.d(TAG, "showFullScreenNotification 호출: id=$notificationId, title=$title")
-
-                    FullScreenNotificationHelper.showFullScreenNotification(
-                        context = this,
-                        notificationId = notificationId,
-                        title = title,
-                        message = message,
-                        medicationId = medicationId,
-                        medicationName = medicationName,
-                        medicationType = medicationType
-                    )
+                    // 더 이상 사용하지 않음 - 일반 푸시 알림만 사용
+                    Log.d(TAG, "showFullScreenNotification 호출됨 (비활성화됨)")
                     result.success(null)
                 }
                 "startVibration" -> {

@@ -65,6 +65,21 @@ class NotificationService {
       onDidReceiveBackgroundNotificationResponse: _onBackgroundNotificationResponse,
     );
 
+    // 앱이 알림 액션으로 인해 시작되었는지 확인 (cold start 처리)
+    final launchDetails = await _notifications.getNotificationAppLaunchDetails();
+    if (launchDetails != null && launchDetails.didNotificationLaunchApp) {
+      final response = launchDetails.notificationResponse;
+      if (response != null) {
+        debugPrint('🚀 앱이 알림 액션으로 시작됨: actionId=${response.actionId}');
+        // 펜딩 액션으로 저장 (나중에 콜백 설정 후 처리)
+        final actionId = response.actionId ?? 'TAP';
+        final payload = response.payload;
+        if (payload != null) {
+          await _savePendingAction(actionId, payload);
+        }
+      }
+    }
+
     _initialized = true;
     debugPrint('✅ NotificationService 초기화 완료 (단순화 버전)');
   }
@@ -100,10 +115,21 @@ class NotificationService {
     final payload = response.payload;
 
     if (actionId != null && payload != null) {
-      onActionReceived?.call(actionId, payload);
+      if (onActionReceived != null) {
+        onActionReceived!(actionId, payload);
+      } else {
+        // 콜백이 아직 설정되지 않았으면 펜딩 액션으로 저장
+        debugPrint('⏳ 콜백 미설정, 펜딩 액션으로 저장: $actionId');
+        _savePendingAction(actionId, payload);
+      }
     } else if (payload != null) {
       // 알림 탭 (버튼 아님) - 앱 열기
-      onActionReceived?.call('TAP', payload);
+      if (onActionReceived != null) {
+        onActionReceived!('TAP', payload);
+      } else {
+        debugPrint('⏳ 콜백 미설정, 펜딩 액션으로 저장: TAP');
+        _savePendingAction('TAP', payload);
+      }
     }
   }
 
@@ -214,6 +240,8 @@ class NotificationService {
   // ============================================
 
   /// 약물 알림 예약
+  /// - 정각 알림 예약 시 5분 후 재알림도 자동 예약
+  /// - 재알림(isSnooze=true)이면 추가 재알림 예약 안 함 (1회만)
   static Future<void> scheduleMedicationNotification({
     required int id,
     required String medicationId,
@@ -292,6 +320,33 @@ class NotificationService {
     );
 
     debugPrint('📬 알림 예약됨: $medicationName at $scheduledTime (id=$id, isSnooze=$isSnooze)');
+
+    // 정각 알림이면 5분 후 재알림도 함께 예약 (재알림은 1회만)
+    if (!isSnooze) {
+      final snoozeTime = scheduledTime.add(Duration(minutes: snoozeMinutes));
+      final snoozeId = id + 100000;
+
+      // 재알림용 페이로드
+      final snoozePayload = jsonEncode({
+        'medicationId': medicationId,
+        'medicationName': medicationName,
+        'type': type.name,
+        'dosage': dosage,
+        'isSnooze': true,
+      });
+
+      await _notifications.zonedSchedule(
+        snoozeId,
+        title,
+        body,
+        tz.TZDateTime.from(snoozeTime, tz.local),
+        notificationDetails,
+        payload: snoozePayload,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+
+      debugPrint('📬 재알림 자동 예약됨: $medicationName at $snoozeTime (id=$snoozeId)');
+    }
   }
 
   /// 스누즈 알림 예약 (5분 후 1회)
@@ -328,6 +383,13 @@ class NotificationService {
     // 스누즈 알림도 함께 취소
     await _notifications.cancel(id + 100000);
     debugPrint('🗑️ 알림 취소: $id');
+  }
+
+  /// 재알림(스누즈)만 취소 - 복용 완료 시 호출
+  static Future<void> cancelSnoozeNotification(int originalId) async {
+    final snoozeId = originalId + 100000;
+    await _notifications.cancel(snoozeId);
+    debugPrint('🗑️ 재알림 취소: $snoozeId (원본 id=$originalId)');
   }
 
   /// 모든 알림 취소
