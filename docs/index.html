@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>기다림메이트 - 난임 치료 약물 알림 앱</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+            line-height: 1.8;
+            color: #333;
+            background: linear-gradient(135deg, #f8f4fc 0%, #fafafa 100%);
+            min-height: 100vh;
+        }
+        .hero {
+            text-align: center;
+            padding: 60px 20px;
+            background: linear-gradient(135deg, #B19CD9 0%, #E8D5F0 100%);
+            color: white;
+        }
+        .hero h1 {
+            font-size: 42px;
+            margin-bottom: 12px;
+        }
+        .hero p {
+            font-size: 18px;
+            opacity: 0.95;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        .card {
+            background: white;
+            padding: 32px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            margin-bottom: 24px;
+        }
+        h2 {
+            color: #B19CD9;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        .feature {
+            text-align: center;
+            padding: 24px;
+            background: #f8f4fc;
+            border-radius: 12px;
+        }
+        .feature-icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+        }
+        .feature h3 {
+            color: #333;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+        .feature p {
+            color: #666;
+            font-size: 14px;
+        }
+        .links {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .link-btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #B19CD9;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        .link-btn:hover {
+            background: #8B7BB5;
+        }
+        .link-btn.outline {
+            background: white;
+            color: #B19CD9;
+            border: 2px solid #B19CD9;
+        }
+        .link-btn.outline:hover {
+            background: #f8f4fc;
+        }
+        .footer {
+            text-align: center;
+            padding: 40px 20px;
+            color: #888;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="hero">
+        <h1>💜 기다림메이트</h1>
+        <p>난임 치료 약물 알림 & 기록 앱</p>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>주요 기능</h2>
+            <div class="features">
+                <div class="feature">
+                    <div class="feature-icon">💊</div>
+                    <h3>약물 알림</h3>
+                    <p>정확한 시간에 알림으로 복약을 잊지 않도록</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">🎙️</div>
+                    <h3>음성 입력</h3>
+                    <p>말로 편하게 약물 정보 등록</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">📅</div>
+                    <h3>치료 기록</h3>
+                    <p>시험관/인공수정 타임라인 관리</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">🔒</div>
+                    <h3>프라이버시</h3>
+                    <p>모든 데이터는 기기 내에만 저장</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>다운로드</h2>
+            <p style="margin-bottom: 20px; color: #666;">곧 App Store와 Google Play에서 만나보실 수 있습니다.</p>
+            <!-- 스토어 출시 후 링크 추가 -->
+        </div>
+
+        <div class="card">
+            <h2>링크</h2>
+            <div class="links">
+                <a href="privacy-policy.html" class="link-btn">개인정보 처리방침</a>
+                <a href="support.html" class="link-btn outline">고객 지원</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>© 2025 기다림메이트. All rights reserved.</p>
+        <p>문의: support@ivfmate.app</p>
+    </div>
+</body>
+</html>
